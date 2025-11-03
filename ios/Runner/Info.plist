@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Microphone access permission -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app needs access to your microphone to record your Quran recitation for Tajweed analysis.</string>
+    
+    <!-- Local network permission (for WebSocket) -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>This app needs network access to connect to Gemini API for real-time transcription.</string>
+    
+    <!-- Bonjour service types -->
+    <key>NSBonjourServiceTypes</key>
+    <array>
+        <string>_http._tcp</string>
+        <string>_https._tcp</string>
+    </array>
+</dict>
+</plist>

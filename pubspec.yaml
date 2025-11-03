@@ -1,0 +1,60 @@
+name: flutter_quran_tajwid
+description: "Flutter Quran Tajweed Recitation Assistant with Gemini Live API"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  riverpod: ^2.3.6
+  flutter_riverpod: ^2.3.6
+
+  # API & HTTP
+  http: ^1.1.0
+  web_socket_channel: ^2.4.0
+
+  # Audio Recording
+  record: ^6.1.2
+  audio_service: ^0.18.18
+
+  # Local Data Storage & Caching
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # Utilities
+  intl: ^0.19.0
+  flutter_dotenv: ^5.1.0
+
+  # UI
+  flutter_screenutil: ^5.9.0
+  string_similarity: ^2.1.1
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - .env
+
+  fonts:
+    # Quranic fonts
+    - family: Quranic
+      fonts:
+        - asset: assets/fonts/UthmanTN_v2-0.ttf
+    - family: ArabicUI
+      fonts:
+        - asset: assets/fonts/NotoNaskhArabic-Regular.ttf
+        - asset: assets/fonts/NotoNaskhArabic-Bold.ttf
+          weight: 700
