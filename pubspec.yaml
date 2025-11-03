@@ -52,7 +52,7 @@ flutter:
     # Quranic fonts
     - family: Quranic
       fonts:
-        - asset: assets/fonts/UthmanTN_v2-0.ttf
+        - asset: assets/fonts/NotoNaskhArabic-Regular.ttf
     - family: ArabicUI
       fonts:
         - asset: assets/fonts/NotoNaskhArabic-Regular.ttf
