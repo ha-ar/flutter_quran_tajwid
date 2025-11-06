@@ -47,6 +47,7 @@ flutter:
 
   assets:
     - .env
+    - lib/utils/quran_text.json
 
   fonts:
     # Quranic fonts

@@ -4,12 +4,11 @@ import 'dart:typed_data';
 import '../models/highlighted_word.dart';
 import '../models/recitation_summary.dart';
 import '../providers/app_state.dart';
-import '../services/quran_service.dart';
+import '../services/quran_json_service.dart';
 import '../services/audio_recording_service.dart';
 import '../widgets/surah_display.dart';
 import '../widgets/audio_visualizer.dart';
 import '../widgets/recitation_summary_widget.dart';
-import '../utils/arabic_utils.dart';
 
 class RecitationScreen extends ConsumerStatefulWidget {
   const RecitationScreen({super.key});
@@ -43,7 +42,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentSurah = ref.watch(currentSurahProvider);
+    final surahNumber = ref.watch(currentSurahNumberProvider);
+    final surahName = ref.watch(currentSurahNameProvider);
     final isReciting = ref.watch(isRecitingProvider);
     final statusMessage = ref.watch(statusMessageProvider);
     final highlightedWords = ref.watch(highlightedWordsProvider);
@@ -52,17 +52,17 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tajweed Trainer'),
+        title: const Text('معلم التجويد'),
         elevation: 0,
       ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: currentSurah == null
+          child: surahNumber == 0
               ? _buildSurahSelector()
               : (recitationSummary != null
                   ? _buildSummaryView(recitationSummary)
-                  : _buildRecitationView(context, currentSurah, highlightedWords, isReciting, statusMessage, audioLevel)),
+                  : _buildRecitationView(context, surahName, highlightedWords, isReciting, statusMessage, audioLevel)),
         ),
       ),
     );
@@ -70,74 +70,117 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
 
   /// Build Surah selector dropdown
   Widget _buildSurahSelector() {
-    final surahs = ref.watch(surahNamesProvider);
+    final surahsAsync = ref.watch(surahNamesProvider);
 
-    return Center(
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Select a Surah',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'ArabicUI',
-                color: Color(0xFF064E3B),
-              ),
+    return surahsAsync.when(
+      data: (surahs) {
+        print('Dropdown received ${surahs.length} surahs');
+        if (surahs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'لم يتم العثور على سور. حاول إعادة التحميل.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontFamily: 'ArabicUI',
+                    color: Color(0xFF374151),
+                  ),
+                  textDirection: TextDirection.rtl,
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () => ref.refresh(surahNamesProvider),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('إعادة تحميل'),
+                ),
+              ],
             ),
-            const SizedBox(height: 30),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFE5E7EB)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButton<int>(
-                isExpanded: true,
-                hint: const Text('Select...'),
-                underline: const SizedBox(),
-                items: surahs
-                    .map((surah) => DropdownMenuItem(
-                          value: surah.number,
-                          child: Text(
-                            '${surah.englishName} (${surah.name})',
-                            style: const TextStyle(
-                              fontFamily: 'ArabicUI',
-                              fontSize: 14,
-                            ),
-                            textDirection: TextDirection.rtl,
-                          ),
-                        ))
-                    .toList(),
-                onChanged: (surahNumber) {
-                  if (surahNumber != null) {
-                    final selectedSurah =
-                        QuranService.getSurah(surahNumber);
-                    if (selectedSurah != null) {
-                      ref.read(currentSurahProvider.notifier).state =
-                          selectedSurah;
+          );
+        }
 
-                      // Initialize highlighted words
-                      final words = splitIntoWords(selectedSurah.text);
-                      final highlighted = words
-                          .map((word) => HighlightedWord(
-                                text: word,
-                                status: WordStatus.unrecited,
+        return Center(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'اختر السورة',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'ArabicUI',
+                    color: Color(0xFF064E3B),
+                  ),
+                ),
+                const SizedBox(height: 30),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: DropdownButton<int>(
+                    isExpanded: true,
+                    hint: const Text('اختر السورة...'),
+                    underline: const SizedBox(),
+                    items: surahs
+                        .map((surah) => DropdownMenuItem(
+                              value: surah['number'] as int,
+                              child: Text(
+                                '${surah['name']} - Page ${surah['pageNumber']}',
+                                style: const TextStyle(
+                                  fontFamily: 'ArabicUI',
+                                  fontSize: 14,
+                                ),
+                                  textDirection: TextDirection.rtl,
+                                ),
                               ))
-                          .toList();
-                      ref.read(highlightedWordsProvider.notifier).state =
-                          highlighted;
+                          .toList(),
+                      onChanged: (surahNumber) async {
+                        if (surahNumber != null) {
+                        final quranService = ref.read(quranJsonServiceProvider);
+                        final surah = quranService.getSurah(surahNumber);
+                        if (surah != null) {
+                          // Get all words from surah (including verse markers for display)
+                          final words = quranService.getSurahWords(surahNumber);
 
-                      ref.read(statusMessageProvider.notifier).state =
-                          'Start again.';
-                    }
-                  }
-                },
-              ),
+                          // Create highlighted words from QuranWord objects
+                          // Use text for display and simpleText for comparison
+                          // Verse markers will display but won't interfere with matching
+                          final highlighted = words
+                              .map((word) => HighlightedWord(
+                                    text: word.text,
+                                    simpleText: word.simpleText,
+                                    status: WordStatus.unrecited,
+                                  ))
+                              .toList();
+
+                          // Store surah info
+                          ref.read(currentSurahNumberProvider.notifier).state =
+                              surahNumber;
+                          ref.read(currentSurahNameProvider.notifier).state =
+                              surah.surahName;
+
+                          ref.read(highlightedWordsProvider.notifier).state =
+                              highlighted;
+
+                          ref.read(statusMessageProvider.notifier).state =
+                              'جاهز للبدء';
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stack) => Center(
+        child: Text('خطأ في تحميل السور: $error'),
       ),
     );
   }
@@ -184,7 +227,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
         // Surah display with scrolling
         Expanded(
           child: SurahDisplay(
-            surahName: selectedSurah.displayName,
+            surahName: selectedSurah as String,
             highlightedWords: highlightedWords,
           ),
         ),
@@ -328,9 +371,9 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     
     // Calculate summary
     final highlightedWords = ref.read(highlightedWordsProvider);
-    final currentSurah = ref.read(currentSurahProvider);
+    final surahName = ref.read(currentSurahNameProvider);
     
-    if (currentSurah != null) {
+    if (surahName.isNotEmpty) {
       final correctCount = highlightedWords
           .where((w) => w.status == WordStatus.recitedCorrect)
           .length;
@@ -344,7 +387,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
           .toList();
       
       final summary = RecitationSummary(
-        surahName: currentSurah.displayName,
+        surahName: surahName,
         totalWords: highlightedWords.length,
         correctWords: correctCount,
         errorWords: errorCount,
@@ -357,28 +400,23 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
 
   /// Reset recitation
   void _resetRecitation() {
-    final currentSurah = ref.read(currentSurahProvider);
-    if (currentSurah != null) {
-      final words = splitIntoWords(currentSurah.text);
-      final highlighted = words
-          .map((word) => HighlightedWord(
-                text: word,
-                status: WordStatus.unrecited,
-              ))
-          .toList();
-      
-      ref.read(highlightedWordsProvider.notifier).state = highlighted;
-      ref.read(nextWordIndexProvider.notifier).state = 0;
-      ref.read(recitedTextProvider.notifier).state = '';
-      ref.read(transcribedWordsQueueProvider.notifier).state = [];
-      ref.read(isRecitingProvider.notifier).state = false;
-      ref.read(statusMessageProvider.notifier).state = 'جاهز للبدء';
-    }
+    final highlightedWords = ref.read(highlightedWordsProvider);
+    // Reset all highlighted words to unrecited
+    final reset = highlightedWords
+        .map((word) => word.copyWith(status: WordStatus.unrecited))
+        .toList();
+    ref.read(highlightedWordsProvider.notifier).state = reset;
+    ref.read(nextWordIndexProvider.notifier).state = 0;
+    ref.read(recitedTextProvider.notifier).state = '';
+    ref.read(transcribedWordsQueueProvider.notifier).state = [];
+    ref.read(isRecitingProvider.notifier).state = false;
+    ref.read(statusMessageProvider.notifier).state = 'جاهز للبدء';
   }
 
   /// Reset and go back to Surah selection
   void _resetAndSelectNewSurah() {
-    ref.read(currentSurahProvider.notifier).state = null;
+    ref.read(currentSurahNumberProvider.notifier).state = 0;
+    ref.read(currentSurahNameProvider.notifier).state = '';
     ref.read(highlightedWordsProvider.notifier).state = [];
     ref.read(recitationSummaryProvider.notifier).state = null;
     ref.read(nextWordIndexProvider.notifier).state = 0;

@@ -5,8 +5,7 @@ import '../models/recitation_summary.dart';
 import '../models/surah.dart';
 import '../services/gemini_live_service.dart';
 import '../services/audio_recording_service.dart';
-import '../services/quran_service.dart';
-import '../services/fuzzy_matching_service.dart';
+import '../services/quran_json_service.dart';
 import '../utils/arabic_utils.dart';
 
 // Gemini Live Service Provider
@@ -23,9 +22,24 @@ final audioRecordingServiceProvider = StateProvider<AudioRecordingService>((ref)
   return AudioRecordingService();
 });
 
+// Quran JSON Service Provider
+final quranJsonServiceProvider = StateProvider<QuranJsonService>((ref) {
+  return QuranJsonService();
+});
+
 // Current Selected Surah
 final currentSurahProvider = StateProvider<Surah?>((ref) {
   return null;
+});
+
+// Current Selected Surah Name (from JSON)
+final currentSurahNameProvider = StateProvider<String>((ref) {
+  return '';
+});
+
+// Current Selected Surah Number (from JSON)
+final currentSurahNumberProvider = StateProvider<int>((ref) {
+  return 0;
 });
                                                                                                                                                                                                                                                                                                
 // Highlighted Words for display
@@ -71,8 +85,20 @@ final transcribedWordsQueueProvider = StateProvider<List<String>>((ref) {
 });
 
 // Surah names list
-final surahNamesProvider = Provider<List<Surah>>((ref) {
-  return QuranService.getAllSurahs();
+final surahNamesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final quranService = ref.watch(quranJsonServiceProvider);
+  try {
+    await quranService.initialize();
+  final surahs = quranService.getAllSurahs();
+  return surahs;
+  } catch (e, st) {
+    // Log error and return empty list so UI can show a friendly state
+    // (Avoid rethrowing to prevent uncaught provider errors from breaking UI)
+    // Print for debugging in logs
+    // ignore: avoid_print
+    print('surahNamesProvider: failed to load Quran JSON: $e\n$st');
+    return <Map<String, dynamic>>[];
+  }
 });
 
 // Process transcribed words and update highlighted words
@@ -87,27 +113,43 @@ class TranscriptionProcessor extends StateNotifier<void> {
   TranscriptionProcessor(this.ref) : super(null);
 
   void processQueue() {
-    final currentSurah = ref.read(currentSurahProvider);
-    if (currentSurah == null) return;
-
-    final surahWords = splitIntoWords(currentSurah.text);
     var currentIndex = ref.read(nextWordIndexProvider);
     var queue = ref.read(transcribedWordsQueueProvider);
     var highlightedWords = ref.read(highlightedWordsProvider);
 
-    final updatedWords = List<HighlightedWord>.from(highlightedWords);
+    if (highlightedWords.isEmpty) return;
 
-    while (queue.isNotEmpty && currentIndex < surahWords.length) {
+    final updatedWords = List<HighlightedWord>.from(highlightedWords);
+    print('processQueue: currentIndex=$currentIndex, queue.length=${queue.length}, totalWords=${highlightedWords.length}');
+
+    while (queue.isNotEmpty && currentIndex < highlightedWords.length) {
+      // Use simpleText for comparison (clean text without diacritics/markers)
+      final expectedWord = normalizeArabic(highlightedWords[currentIndex].simpleText);
+      
+      // Skip verse markers (they have empty or numeric simpleText)
+      if (expectedWord.isEmpty || RegExp(r'^[\d٠-٩]+$').hasMatch(expectedWord)) {
+        print('⏭️ Skipping verse marker at index $currentIndex: text="${highlightedWords[currentIndex].text}", simpleText="$expectedWord"');
+        // Mark as unrecited but visible (not part of recitation matching)
+        currentIndex++;
+        continue;
+      }
+
       final transcribedWord = normalizeArabic(queue.removeAt(0));
-      final expectedWord = normalizeArabic(surahWords[currentIndex]);
+      print('Comparing: transcribed="$transcribedWord" vs expected="$expectedWord" (simpleText, index=$currentIndex)');
+      print('Display text: "${highlightedWords[currentIndex].text}"');
 
       if (transcribedWord.isEmpty) {
         continue;
       }
 
-      final isSimilar = FuzzyMatchingService.isSimilar(transcribedWord, expectedWord);
+      // Use fuzzy matching for more lenient error detection
+      final similarityScore = _calculateSimilarity(transcribedWord, expectedWord);
+      print('Similarity score: $similarityScore');
 
-      if (isSimilar) {
+      // Mark as correct if similarity is high enough (>= 80%)
+      // This accounts for minor pronunciation variations in Tajweed
+      if (similarityScore >= 0.8) {
+        print('✅ Match accepted (similarity >= 0.8)');
         if (updatedWords[currentIndex].status != WordStatus.recitedCorrect) {
           updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
             status: WordStatus.recitedCorrect,
@@ -115,20 +157,78 @@ class TranscriptionProcessor extends StateNotifier<void> {
           );
         }
         currentIndex++;
-      } else {
+      }
+      // Mark as partial match (pronunciation close but not exact)
+      else if (similarityScore >= 0.6) {
+        print('⚠️ Partial match (similarity 0.6-0.8)');
+        if (updatedWords[currentIndex].status != WordStatus.recitedCorrect) {
+          updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
+            status: WordStatus.recitedTajweedError,
+            tajweedError:
+                'Pronunciation similar but not exact. Check Tajweed rules.',
+          );
+        }
+        currentIndex++;
+      }
+      // Mark as error (significant mismatch)
+      else {
+        print('❌ Match failed (similarity < 0.6)');
         if (updatedWords[currentIndex].status != WordStatus.recitedTajweedError) {
           updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
             status: WordStatus.recitedTajweedError,
             tajweedError:
-                'Expected: "${surahWords[currentIndex]}", Heard: "$transcribedWord"',
+                'Expected: "${highlightedWords[currentIndex].simpleText}", Heard: "$transcribedWord"',
           );
         }
         currentIndex++;
       }
     }
 
+    print('processQueue complete: newIndex=$currentIndex');
     ref.read(nextWordIndexProvider.notifier).state = currentIndex;
     ref.read(transcribedWordsQueueProvider.notifier).state = queue;
     ref.read(highlightedWordsProvider.notifier).state = updatedWords;
+  }
+
+  /// Calculate string similarity using Levenshtein distance
+  double _calculateSimilarity(String word1, String word2) {
+    final distance = _levenshteinDistance(word1, word2);
+    final maxLength = word1.length > word2.length ? word1.length : word2.length;
+    if (maxLength == 0) return 1.0;
+    return 1.0 - (distance / maxLength);
+  }
+
+  /// Levenshtein distance algorithm for string similarity
+  int _levenshteinDistance(String a, String b) {
+    final aLength = a.length;
+    final bLength = b.length;
+
+    if (aLength == 0) return bLength;
+    if (bLength == 0) return aLength;
+
+    final matrix = List.generate(
+      aLength + 1,
+      (i) => List.filled(bLength + 1, 0),
+    );
+
+    for (var i = 0; i <= aLength; i++) {
+      matrix[i][0] = i;
+    }
+    for (var j = 0; j <= bLength; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (var i = 1; i <= aLength; i++) {
+      for (var j = 1; j <= bLength; j++) {
+        final cost = a[i - 1] == b[j - 1] ? 0 : 1;
+        matrix[i][j] = [
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost,
+        ].reduce((a, b) => a < b ? a : b);
+      }
+    }
+
+    return matrix[aLength][bLength];
   }
 }

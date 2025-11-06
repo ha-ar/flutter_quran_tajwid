@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'services/quran_service.dart';
+import 'services/quran_json_service.dart';
 import 'screens/recitation_screen.dart';
 
 void main() async {
   await dotenv.load();
-  await QuranService.initialize();
+  // Initialize JSON-based Quran data
+  await QuranJsonService().initialize();
   runApp(
     const ProviderScope(
       child: MyApp(),

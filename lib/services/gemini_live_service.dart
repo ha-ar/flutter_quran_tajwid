@@ -70,7 +70,7 @@ class GeminiTranscriptionMessage {
 
 class GeminiLiveService {
   final String apiKey;
-  final String model = 'gemini-live-2.5-flash-preview';
+  final String model = 'gemini-2.0-flash-live-001';
   
   WebSocketChannel? _channel;
   final StreamController<GeminiTranscriptionMessage> _transcriptionController =
@@ -156,7 +156,7 @@ class GeminiLiveService {
             'parts': [
               {
                 'text':
-                    'You are a Quran recitation assistant. Transcribe the Arabic audio accurately. Only output the transcribed Arabic text, nothing else.',
+                    'You are a Quran recitation assistant. Transcribe the Arabic audio accurately. Only output the transcribed Arabic text, no other language can be used.',
               }
             ]
           }
