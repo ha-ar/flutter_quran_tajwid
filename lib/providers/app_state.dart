@@ -6,6 +6,7 @@ import '../models/surah.dart';
 import '../services/gemini_live_service.dart';
 import '../services/audio_recording_service.dart';
 import '../services/quran_json_service.dart';
+import '../services/fuzzy_matching_service.dart';
 import '../utils/arabic_utils.dart';
 
 // Gemini Live Service Provider
@@ -142,45 +143,49 @@ class TranscriptionProcessor extends StateNotifier<void> {
         continue;
       }
 
-      // Use fuzzy matching for more lenient error detection
-      final similarityScore = _calculateSimilarity(transcribedWord, expectedWord);
+      // Use FuzzyMatchingService for more lenient error detection
+      final similarityScore = FuzzyMatchingService.calculateSimilarity(transcribedWord, expectedWord);
       print('Similarity score: $similarityScore');
 
-      // Mark as correct if similarity is high enough (>= 80%)
-      // This accounts for minor pronunciation variations in Tajweed
-      if (similarityScore >= 0.8) {
-        print('✅ Match accepted (similarity >= 0.8)');
-        if (updatedWords[currentIndex].status != WordStatus.recitedCorrect) {
-          updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
-            status: WordStatus.recitedCorrect,
-            tajweedError: null,
-          );
-        }
-        currentIndex++;
-      }
-      // Mark as partial match (pronunciation close but not exact)
-      else if (similarityScore >= 0.6) {
-        print('⚠️ Partial match (similarity 0.6-0.8)');
-        if (updatedWords[currentIndex].status != WordStatus.recitedCorrect) {
-          updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
-            status: WordStatus.recitedTajweedError,
-            tajweedError:
-                'Pronunciation similar but not exact. Check Tajweed rules.',
-          );
-        }
-        currentIndex++;
-      }
-      // Mark as error (significant mismatch)
-      else {
-        print('❌ Match failed (similarity < 0.6)');
-        if (updatedWords[currentIndex].status != WordStatus.recitedTajweedError) {
-          updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
-            status: WordStatus.recitedTajweedError,
-            tajweedError:
-                'Expected: "${highlightedWords[currentIndex].simpleText}", Heard: "$transcribedWord"',
-          );
-        }
-        currentIndex++;
+      // Determine match status using FuzzyMatchingService thresholds
+      final matchResult = FuzzyMatchingService.determineMatchStatus(similarityScore);
+      
+      switch (matchResult) {
+        case MatchResult.correct:
+          // Mark as correct if similarity is high enough (>= 80%)
+          // This accounts for minor pronunciation variations in Tajweed
+          print('✅ Match accepted (similarity >= 0.8)');
+          if (updatedWords[currentIndex].status != WordStatus.recitedCorrect) {
+            updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
+              status: WordStatus.recitedCorrect,
+              tajweedError: null,
+            );
+          }
+          currentIndex++;
+          
+        case MatchResult.warning:
+          // Mark as partial match (pronunciation close but not exact)
+          print('⚠️ Partial match (similarity 0.6-0.8)');
+          if (updatedWords[currentIndex].status != WordStatus.recitedCorrect) {
+            updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
+              status: WordStatus.recitedTajweedError,
+              tajweedError:
+                  'Pronunciation similar but not exact. Check Tajweed rules.',
+            );
+          }
+          currentIndex++;
+          
+        case MatchResult.error:
+          // Mark as error (significant mismatch)
+          print('❌ Match failed (similarity < 0.6)');
+          if (updatedWords[currentIndex].status != WordStatus.recitedTajweedError) {
+            updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
+              status: WordStatus.recitedTajweedError,
+              tajweedError:
+                  'Expected: "${highlightedWords[currentIndex].simpleText}", Heard: "$transcribedWord"',
+            );
+          }
+          currentIndex++;
       }
     }
 
@@ -188,47 +193,5 @@ class TranscriptionProcessor extends StateNotifier<void> {
     ref.read(nextWordIndexProvider.notifier).state = currentIndex;
     ref.read(transcribedWordsQueueProvider.notifier).state = queue;
     ref.read(highlightedWordsProvider.notifier).state = updatedWords;
-  }
-
-  /// Calculate string similarity using Levenshtein distance
-  double _calculateSimilarity(String word1, String word2) {
-    final distance = _levenshteinDistance(word1, word2);
-    final maxLength = word1.length > word2.length ? word1.length : word2.length;
-    if (maxLength == 0) return 1.0;
-    return 1.0 - (distance / maxLength);
-  }
-
-  /// Levenshtein distance algorithm for string similarity
-  int _levenshteinDistance(String a, String b) {
-    final aLength = a.length;
-    final bLength = b.length;
-
-    if (aLength == 0) return bLength;
-    if (bLength == 0) return aLength;
-
-    final matrix = List.generate(
-      aLength + 1,
-      (i) => List.filled(bLength + 1, 0),
-    );
-
-    for (var i = 0; i <= aLength; i++) {
-      matrix[i][0] = i;
-    }
-    for (var j = 0; j <= bLength; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (var i = 1; i <= aLength; i++) {
-      for (var j = 1; j <= bLength; j++) {
-        final cost = a[i - 1] == b[j - 1] ? 0 : 1;
-        matrix[i][j] = [
-          matrix[i - 1][j] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j - 1] + cost,
-        ].reduce((a, b) => a < b ? a : b);
-      }
-    }
-
-    return matrix[aLength][bLength];
   }
 }

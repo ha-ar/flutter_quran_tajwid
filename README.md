@@ -96,9 +96,11 @@ lib/
 │   ├── recitation_summary.dart
 │   └── surah.dart
 ├── services/                 # Business logic
-│   ├── gemini_live_service.dart   # Gemini API integration
-│   ├── audio_recording_service.dart
-│   └── quran_service.dart    # Quran data (114 Surahs)
+│   ├── gemini_live_service.dart      # Gemini API integration
+│   ├── audio_recording_service.dart  # Audio capture
+│   ├── audio_analysis_service.dart   # Audio quality analysis
+│   ├── fuzzy_matching_service.dart   # Text similarity matching
+│   └── quran_json_service.dart       # Quran data (114 Surahs)
 ├── providers/                # Riverpod state management
 │   └── app_state.dart
 ├── screens/                  # UI screens
@@ -118,6 +120,18 @@ lib/
 - PCM audio at 16kHz mono format
 - Real-time Arabic transcriptions
 - Connection state and error handling
+
+### Fuzzy Matching Service
+- **Text similarity calculation** using Levenshtein distance
+- **Dual algorithm approach**: string_similarity + Levenshtein
+- **Three-tier matching**: Correct (≥80%), Warning (60-79%), Error (<60%)
+- Optimized for Arabic text comparison
+
+### Audio Analysis Service
+- **Audio quality checks**: Volume, clipping, silence detection
+- **Audio metrics**: RMS energy, pitch, frequency analysis
+- **Waveform comparison**: For future reference audio integration
+- Real-time feedback for recording quality
 
 ### Quran Service
 - **114 Complete Surahs** with full text
@@ -143,12 +157,24 @@ lib/
 2. Press "ابدأ الترتيل" (Start Reciting)
 3. App automatically connects to Gemini Live API
 4. Speak the Quranic text
-5. Words are transcribed in real-time
-6. **Color Coding**:
-   - 🟢 **Green** - Correctly recited words
-   - 🔴 **Red** - Tajweed errors detected
+5. Words are transcribed in real-time by Gemini
+6. **Fuzzy Matching**: Compares transcribed text with expected words
+   - Uses Levenshtein distance + string similarity
+   - Accounts for minor pronunciation variations
+   - Arabic text normalization (removes diacritics, normalizes alif forms)
+7. **Color Coding**:
+   - 🟢 **Green** - Correctly recited words (≥80% similarity)
+   - 🟡 **Yellow** - Partial match, check Tajweed (60-79% similarity)
+   - 🔴 **Red** - Tajweed errors detected (<60% similarity)
    - ⚪ **Gray** - Not yet recited
-7. Press "إيقاف" (Stop) to end and view detailed summary
+8. Press "إيقاف" (Stop) to end and view detailed summary
+
+### Audio Matching Approach
+The app uses **text-based fuzzy matching** (not direct audio comparison):
+- Gemini Live API provides high-quality Arabic transcription
+- Transcribed text is compared with expected Quranic text
+- Fuzzy matching allows for minor pronunciation variations
+- See [AUDIO_MATCHING_ARCHITECTURE.md](AUDIO_MATCHING_ARCHITECTURE.md) for technical details
 
 ## ⚙️ Configuration
 
