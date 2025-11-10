@@ -1,7 +1,20 @@
 import 'dart:typed_data';
 import 'dart:math' as math;
 
-/// Audio analysis service for comparing waveforms and detecting tajweed errors
+/// Audio analysis service for analyzing audio quality and characteristics.
+/// 
+/// This service provides tools to analyze recorded audio for:
+/// - Volume/energy levels
+/// - Frequency characteristics
+/// - Pitch detection
+/// - Audio quality metrics
+/// 
+/// Note: This service is designed for audio quality analysis, NOT for 
+/// word-by-word comparison. The app uses Gemini Live API transcription
+/// combined with text-based fuzzy matching for recitation verification.
+/// 
+/// Audio-to-audio comparison would require reference recordings of a 
+/// professional reciter, which are not currently available in the app.
 class AudioAnalysisService {
   /// Compare two audio buffers and return similarity score (0.0 to 1.0)
   /// Higher score means more similar audio characteristics
@@ -180,6 +193,65 @@ class AudioAnalysisService {
       'zero_crossing_rate': _calculateZeroCrossingRate(samples),
       'estimated_pitch_hz': _estimatePitch(samples),
       'peak_amplitude': samples.reduce((a, b) => math.max(a.abs(), b.abs())),
+    };
+  }
+
+  /// Check if audio quality is sufficient for transcription
+  /// Returns a map with quality status and recommendations
+  static Map<String, dynamic> checkAudioQuality(Uint8List audioData) {
+    if (audioData.isEmpty) {
+      return {
+        'isGood': false,
+        'issues': ['No audio data'],
+        'recommendations': ['Ensure microphone is working'],
+      };
+    }
+
+    final samples = _pcmToFloat(audioData);
+    if (samples.isEmpty) {
+      return {
+        'isGood': false,
+        'issues': ['Could not process audio'],
+        'recommendations': ['Check audio format (PCM 16-bit expected)'],
+      };
+    }
+
+    final issues = <String>[];
+    final recommendations = <String>[];
+
+    // Check volume level
+    final rms = _calculateMagnitude(samples);
+    if (rms < 0.01) {
+      issues.add('Volume too low');
+      recommendations.add('Speak louder or move closer to microphone');
+    } else if (rms > 0.9) {
+      issues.add('Volume too high (may be clipping)');
+      recommendations.add('Speak softer or move away from microphone');
+    }
+
+    // Check for silence
+    final energy = _calculateEnergy(samples);
+    if (energy < 0.0001) {
+      issues.add('Audio appears to be silent');
+      recommendations.add('Check if microphone is muted');
+    }
+
+    // Check peak amplitude for clipping
+    final peak = samples.reduce((a, b) => math.max(a.abs(), b.abs()));
+    if (peak > 0.95) {
+      issues.add('Audio may be clipping');
+      recommendations.add('Reduce input volume');
+    }
+
+    return {
+      'isGood': issues.isEmpty,
+      'issues': issues,
+      'recommendations': recommendations,
+      'metrics': {
+        'rms': rms,
+        'energy': energy,
+        'peak': peak,
+      },
     };
   }
 }
