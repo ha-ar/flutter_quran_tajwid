@@ -5,6 +5,7 @@ import '../models/recitation_summary.dart';
 import '../models/surah.dart';
 import '../services/gemini_live_service.dart';
 import '../services/audio_recording_service.dart';
+import '../services/audio_matching_service.dart';
 import '../services/quran_json_service.dart';
 import '../utils/arabic_utils.dart';
 
@@ -20,6 +21,11 @@ final geminiLiveServiceProvider = StateProvider<GeminiLiveService?>((ref) {
 // Audio Recording Service Provider
 final audioRecordingServiceProvider = StateProvider<AudioRecordingService>((ref) {
   return AudioRecordingService();
+});
+
+// Audio Matching Service Provider
+final audioMatchingServiceProvider = StateProvider<AudioMatchingService>((ref) {
+  return AudioMatchingService();
 });
 
 // Quran JSON Service Provider

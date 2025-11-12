@@ -4,17 +4,19 @@ import '../models/highlighted_word.dart';
 class SurahDisplay extends StatelessWidget {
   final String surahName;
   final List<HighlightedWord> highlightedWords;
+  final ScrollController? scrollController; // optional, passed from parent for lazy loading
 
   const SurahDisplay({
     super.key,
     required this.surahName,
     required this.highlightedWords,
+    this.scrollController,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Organize words into lines (max 15 lines or fewer if Surah is short)
-    final lines = _organizeIntoLines(highlightedWords);
+  // Organize words into lines (max 15 lines or fewer if Surah is short)
+  final lines = _organizeIntoLines(highlightedWords);
 
     return Column(
       children: [
@@ -31,9 +33,11 @@ class SurahDisplay extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         
-        // Scrollable Surah Text Container
+        // Scrollable Surah Text Container. Use provided controller if available so parent
+        // can observe scroll events (for lazy loading additional lines).
         Expanded(
           child: SingleChildScrollView(
+            controller: scrollController,
             child: Directionality(
               textDirection: TextDirection.rtl,
               child: Container(
@@ -44,8 +48,11 @@ class SurahDisplay extends StatelessWidget {
                   color: Colors.white,
                 ),
                 child: Column(
-                  spacing: 12,
-                  children: lines.map((line) => _buildLine(context, line)).toList(),
+                  // spacing handled by SizedBox between children if needed
+                  children: lines.map((line) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6.0),
+                    child: _buildLine(context, line),
+                  )).toList(),
                 ),
               ),
             ),

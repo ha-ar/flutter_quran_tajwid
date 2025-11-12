@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import '../models/highlighted_word.dart';
 import '../models/recitation_summary.dart';
 import '../providers/app_state.dart';
-import '../services/quran_json_service.dart';
 import '../services/audio_recording_service.dart';
 import '../widgets/surah_display.dart';
 import '../widgets/audio_visualizer.dart';
@@ -20,11 +19,15 @@ class RecitationScreen extends ConsumerStatefulWidget {
 class _RecitationScreenState extends ConsumerState<RecitationScreen> {
   late final ScrollController _scrollController;
   late AudioRecordingService _audioRecordingService;
+  // visible words for lazy rendering
+  List<HighlightedWord> _visibleWords = [];
+  final int _initialVisibleWords = 120; // approx 15 lines worth of words
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
     _initializeAudioRecording();
   }
 
@@ -35,6 +38,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _audioRecordingService.dispose();
     super.dispose();
@@ -57,7 +61,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(0),
           child: surahNumber == 0
               ? _buildSurahSelector()
               : (recitationSummary != null
@@ -66,6 +70,57 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
         ),
       ),
     );
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final max = _scrollController.position.maxScrollExtent;
+    final current = _scrollController.position.pixels;
+    // If user scrolls within 200 pixels of bottom, load more
+    if (max - current < 200) {
+      _loadMoreVisibleWords();
+    }
+  }
+
+  void _loadMoreVisibleWords() {
+    final highlightedWords = ref.read(highlightedWordsProvider);
+    if (highlightedWords.isEmpty) return;
+    final currentLen = _visibleWords.isEmpty ? 0 : _visibleWords.length;
+    final nextLen = (currentLen == 0) ? _initialVisibleWords : (currentLen + 80);
+    if (currentLen >= highlightedWords.length) return; // already full
+    final to = nextLen.clamp(0, highlightedWords.length);
+    setState(() {
+      _visibleWords = highlightedWords.sublist(0, to);
+    });
+  }
+
+  /// Build highlighted words for the entire surah in small async chunks to avoid blocking UI thread
+  void _buildHighlightedWordsInChunks(List<dynamic> words) async {
+    // words are QuranWord objects; we already set the initial chunk
+    final total = words.length;
+    const batch = 200; // process 200 words per iteration
+    final current = ref.read(highlightedWordsProvider).length;
+
+    var accumulated = List<HighlightedWord>.from(ref.read(highlightedWordsProvider));
+
+    for (var i = current; i < total; i += batch) {
+      final to = (i + batch).clamp(0, total);
+      final chunk = words.getRange(i, to).map((word) => HighlightedWord(
+            text: word.text,
+            simpleText: word.simpleText,
+            status: WordStatus.unrecited,
+          ));
+      accumulated.addAll(chunk);
+
+      // Update provider and visible slice in small async steps
+      ref.read(highlightedWordsProvider.notifier).state = List<HighlightedWord>.from(accumulated);
+      setState(() {
+        _visibleWords = accumulated.sublist(0, accumulated.length < _initialVisibleWords ? accumulated.length : accumulated.length);
+      });
+
+      // Yield to event loop to keep UI responsive
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
   }
 
   /// Build Surah selector dropdown
@@ -81,19 +136,19 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Text(
-                  'لم يتم العثور على سور. حاول إعادة التحميل.',
+                  'Select Surah',
                   style: TextStyle(
                     fontSize: 16,
                     fontFamily: 'ArabicUI',
                     color: Color(0xFF374151),
                   ),
-                  textDirection: TextDirection.rtl,
+                  // textDirection: TextDirection.rtl,
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
                   onPressed: () => ref.refresh(surahNamesProvider),
                   icon: const Icon(Icons.refresh),
-                  label: const Text('إعادة تحميل'),
+                  label: const Text('Select'),
                 ),
               ],
             ),
@@ -114,15 +169,17 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                     color: Color(0xFF064E3B),
                   ),
                 ),
-                const SizedBox(height: 30),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: DropdownButton<int>(
-                    isExpanded: true,
+                const SizedBox(height: 70), // increase top spacing by 40px to avoid action bar overlap
+                Padding(
+                  padding: const EdgeInsets.only(top: 40.0, left: 16, right: 16), // extra top padding for dropdown menu
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButton<int>(
+                      isExpanded: true,
                     hint: const Text('اختر السورة...'),
                     underline: const SizedBox(),
                     items: surahs
@@ -141,36 +198,40 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                       onChanged: (surahNumber) async {
                         if (surahNumber != null) {
                         final quranService = ref.read(quranJsonServiceProvider);
+                        final audioMatching = ref.read(audioMatchingServiceProvider);
                         final surah = quranService.getSurah(surahNumber);
                         if (surah != null) {
-                          // Get all words from surah (including verse markers for display)
-                          final words = quranService.getSurahWords(surahNumber);
+                                    // Reset match tracking when surah changes
+                                    audioMatching.resetMatchTracking();
+                                    
+                                    // Get all words from surah (including verse markers for display)
+                                    final words = quranService.getSurahWords(surahNumber);
 
-                          // Create highlighted words from QuranWord objects
-                          // Use text for display and simpleText for comparison
-                          // Verse markers will display but won't interfere with matching
-                          final highlighted = words
-                              .map((word) => HighlightedWord(
-                                    text: word.text,
-                                    simpleText: word.simpleText,
-                                    status: WordStatus.unrecited,
-                                  ))
-                              .toList();
+                                    // Store surah info immediately so UI can update
+                                    ref.read(currentSurahNumberProvider.notifier).state = surahNumber;
+                                    ref.read(currentSurahNameProvider.notifier).state = surah.surahName;
 
-                          // Store surah info
-                          ref.read(currentSurahNumberProvider.notifier).state =
-                              surahNumber;
-                          ref.read(currentSurahNameProvider.notifier).state =
-                              surah.surahName;
+                                    // Immediately set a small chunk synchronously to avoid blocking UI
+                                    final initialChunk = words.take(_initialVisibleWords).map((word) => HighlightedWord(
+                                          text: word.text,
+                                          simpleText: word.simpleText,
+                                          status: WordStatus.unrecited,
+                                        )).toList();
 
-                          ref.read(highlightedWordsProvider.notifier).state =
-                              highlighted;
+                                    // Set provider briefly to initial chunk and visible words
+                                    ref.read(highlightedWordsProvider.notifier).state = List<HighlightedWord>.from(initialChunk);
+                                    setState(() {
+                                      _visibleWords = List<HighlightedWord>.from(initialChunk);
+                                    });
 
-                          ref.read(statusMessageProvider.notifier).state =
-                              'جاهز للبدء';
+                                    // Build remaining highlighted words in small async chunks to avoid freezing UI
+                                    _buildHighlightedWordsInChunks(words);
+
+                                    ref.read(statusMessageProvider.notifier).state = 'جاهز للبدء';
                         }
                       }
                     },
+                    ),
                   ),
                 ),
               ],
@@ -229,6 +290,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
           child: SurahDisplay(
             surahName: selectedSurah as String,
             highlightedWords: highlightedWords,
+            scrollController: _scrollController,
           ),
         ),
         
@@ -300,49 +362,35 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
   /// Start recitation
   Future<void> _startRecitation() async {
     ref.read(isRecitingProvider.notifier).state = true;
-    ref.read(statusMessageProvider.notifier).state = 'Connecting...'; ;
-
-    final geminiService = ref.read(geminiLiveServiceProvider);
-    if (geminiService == null) {
-      ref.read(statusMessageProvider.notifier).state ='Connection error.';
-      return;
-    }
+    ref.read(statusMessageProvider.notifier).state = 'جاري تسجيل الترتيل...';
 
     try {
-      // Connect to Gemini
-      await geminiService.connect();
-      ref.read(statusMessageProvider.notifier).state = 'Connected..';
-
-      // Listen to transcription stream
-      geminiService.transcriptionStream.listen(
-        (message) {
-          // Only process finalized words (isFinal: true)
-          if (message.isFinal && message.text.isNotEmpty) {
-            // Split into words and add to queue only when final
-            final words = message.text.split(RegExp(r'\s+'));
-            for (final word in words) {
-              if (word.isNotEmpty) {
-                final queue = ref.read(transcribedWordsQueueProvider);
-                queue.add(word);
-                ref.read(transcribedWordsQueueProvider.notifier).state = List.from(queue);
-
-                // Process queue to update highlighted words
-                ref.read(processTranscriptionProvider.notifier).processQueue();
-              }
-            }
-          }
-        },
-        onError: (error) {
-          ref.read(statusMessageProvider.notifier).state = 'خطأ: $error';
-          ref.read(isRecitingProvider.notifier).state = false;
-        },
-      );
-
-      // Start audio recording
+      // Get audio matching service
+      final audioMatching = ref.read(audioMatchingServiceProvider);
+      final surahNumber = ref.read(currentSurahNumberProvider);
+      
+      audioMatching.clearBuffer(); // Clear buffer at start
+      
+      // Start audio recording and feed directly to audio matching
       await _audioRecordingService.startRecording(
         onAudioData: (List<int> audioData) {
-          // Send audio to Gemini
-          geminiService.sendAudioChunk(Uint8List.fromList(audioData));
+          // Add audio chunk to matching buffer
+          audioMatching.addAudioChunk(audioData);
+          
+          // Try to extract and match every 500ms of audio
+          final bytesFor500ms = (16000 * 0.5 * 2).toInt(); // 16kHz * 0.5s * 2 bytes
+          
+          if (audioMatching.getBuffer().length >= bytesFor500ms) {
+            final segment = audioMatching.extractSegment(500); // 500ms segment
+            
+            if (segment != null) {
+              // Match against reference verses
+              _matchAudioSegment(segment, surahNumber);
+              
+              // Remove processed bytes from buffer (move to next segment)
+              audioMatching.removeProcessedBytes((segment.length * 0.8).toInt());
+            }
+          }
         },
         onError: (String error) {
           ref.read(statusMessageProvider.notifier).state = 'خطأ في التسجيل: $error';
@@ -355,6 +403,155 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     }
   }
 
+  /// Match audio segment against reference verses
+  Future<void> _matchAudioSegment(Uint8List segment, int surahNumber) async {
+    final audioMatching = ref.read(audioMatchingServiceProvider);
+    
+    // Throttle: skip if we matched too recently (avoid excessive heavy work)
+    if (!audioMatching.shouldMatch(minIntervalMs: 300)) {
+      return;
+    }
+    
+    try {
+      print('\n🎤 ═══ AUDIO MATCHING START ═══');
+      print('Segment size: ${segment.length} bytes');
+      print('Surah: $surahNumber');
+      
+      // Match with reference verses using sliding window + limited verse checks
+      final matches = await audioMatching.matchWithVerses(
+        segment,
+        surahNumber,
+        minScore: 0.75, // High confidence threshold
+        maxMatches: 2,
+        maxVerseToCheck: 10, // reduced from 15; sliding window focuses the search
+        windowRadius: 5, // search ±5 verses around last match
+      );
+      
+      print('Matches found: ${matches.length}');
+      for (final m in matches) {
+        print('  Verse ${m.verseNumber}: ${(m.score * 100).toStringAsFixed(1)}%');
+      }
+      
+      if (matches.isNotEmpty) {
+        final bestMatch = matches.first;
+        
+        // Debug logging
+        print('✅ Best Match - Verse ${bestMatch.verseNumber}: ${(bestMatch.score * 100).toStringAsFixed(1)}%');
+        
+        // Update status
+        ref.read(statusMessageProvider.notifier).state =
+            'الآية ${bestMatch.verseNumber}: ${(bestMatch.score * 100).toStringAsFixed(0)}%';
+        
+        print('Calling _highlightVerseWords(${bestMatch.verseNumber})...');
+        
+        // Highlight the word at this verse
+        _highlightVerseWords(bestMatch.verseNumber);
+      } else {
+        print('❌ No matches found above threshold');
+      }
+      
+      print('═══ AUDIO MATCHING END ═══\n');
+    } catch (e) {
+      print('❌ Audio matching error: $e');
+      print('Stack trace: ${StackTrace.current}');
+    }
+  }
+
+  /// Highlight all words in a specific verse
+  void _highlightVerseWords(int verseNumber) {
+    print('\n🔍 ═══ HIGHLIGHTING DEBUG START ═══');
+    print('Target Verse: $verseNumber');
+    
+    final highlightedWords = ref.read(highlightedWordsProvider);
+    final quranService = ref.read(quranJsonServiceProvider);
+    final surahNumber = ref.read(currentSurahNumberProvider);
+    
+    print('Current Surah: $surahNumber');
+    print('Total highlighted words in memory: ${highlightedWords.length}');
+    
+    // Get all words from the verse
+    final surah = quranService.getSurah(surahNumber);
+    if (surah == null) {
+      print('❌ ERROR: Surah $surahNumber not found!');
+      return;
+    }
+    
+    final allWords = quranService.getSurahWords(surahNumber);
+    print('Total words in surah: ${allWords.length}');
+    
+    final verseWords = allWords.where((w) => w.verseNumber == verseNumber).toList();
+    print('Words in verse $verseNumber: ${verseWords.length}');
+    
+    if (verseWords.isEmpty) {
+      print('❌ ERROR: No words found for verse $verseNumber!');
+      return;
+    }
+    
+    print('\n📖 Reference verse words:');
+    for (int i = 0; i < verseWords.length; i++) {
+      print('  [$i] text="${verseWords[i].text}" simple="${verseWords[i].simpleText}"');
+    }
+    
+    // Build updated words list with all verse words highlighted at once
+    final updatedWords = List<HighlightedWord>.from(highlightedWords);
+    int currentWordIndex = 0;
+    int lastHighlightedIndex = -1;
+    int matchCount = 0;
+    
+    print('\n🔍 Starting word matching...');
+    print('Searching through ${updatedWords.length} words in memory');
+    
+    for (int i = 0; i < updatedWords.length && currentWordIndex < verseWords.length; i++) {
+      final memoryWord = updatedWords[i];
+      final refWord = verseWords[currentWordIndex];
+      
+      // Compare simple text (without diacritics/markers)
+      bool isMatch = memoryWord.simpleText.isNotEmpty && 
+          refWord.simpleText.isNotEmpty &&
+          memoryWord.simpleText == refWord.simpleText;
+      
+      // Debug first 10 comparisons or all matches
+      if (i < 10 || isMatch) {
+        if (isMatch) {
+          print('  ✅ MATCH at index $i: "${memoryWord.simpleText}" == "${refWord.simpleText}"');
+        } else {
+          print('  ❌ NO MATCH at index $i: "${memoryWord.simpleText}" vs "${refWord.simpleText}"');
+        }
+      }
+      
+      if (isMatch) {
+        // Mark this word as recited correctly
+        updatedWords[i] = updatedWords[i].copyWith(
+          status: WordStatus.recitedCorrect,
+          tajweedError: null,
+        );
+        lastHighlightedIndex = i;
+        currentWordIndex++;
+        matchCount++;
+      }
+    }
+    
+    print('\n📊 Matching Results:');
+    print('  Words matched: $matchCount / ${verseWords.length}');
+    print('  Last highlighted index: $lastHighlightedIndex');
+    
+    // Update provider once with all changes
+    if (lastHighlightedIndex >= 0) {
+      print('✅ Updating highlightedWordsProvider with $matchCount new highlights');
+      ref.read(highlightedWordsProvider.notifier).state = updatedWords;
+      ref.read(nextWordIndexProvider.notifier).state = lastHighlightedIndex + 1;
+      
+      // Verify update
+      final updatedState = ref.read(highlightedWordsProvider);
+      final greenCount = updatedState.where((w) => w.status == WordStatus.recitedCorrect).length;
+      print('✅ Provider updated! Total green words now: $greenCount');
+    } else {
+      print('⚠️  WARNING: No words were highlighted! lastHighlightedIndex = $lastHighlightedIndex');
+    }
+    
+    print('═══ HIGHLIGHTING DEBUG END ═══\n');
+  }
+
   /// Stop recitation
   Future<void> _stopRecitation() async {
     ref.read(isRecitingProvider.notifier).state = false;
@@ -363,11 +560,10 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     // Stop audio recording
     await _audioRecordingService.stopRecording();
     
-    // Disconnect from Gemini
-    final geminiService = ref.read(geminiLiveServiceProvider);
-    if (geminiService != null) {
-      await geminiService.disconnect();
-    }
+    // Clear audio buffer and reset match tracking
+    final audioMatching = ref.read(audioMatchingServiceProvider);
+    audioMatching.clearBuffer();
+    audioMatching.resetMatchTracking();
     
     // Calculate summary
     final highlightedWords = ref.read(highlightedWordsProvider);

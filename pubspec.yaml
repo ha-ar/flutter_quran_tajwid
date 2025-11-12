@@ -44,18 +44,21 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
   assets:
     - .env
     - lib/utils/quran_text.json
-
+    - assets/audio/
+    - assets/fonts/
+    - assets/audio/surah_001/
+    - assets/audio/surah_002/
+    - assets/audio/surah_003/
+    - assets/audio/surah_004/
   fonts:
     # Quranic fonts
     - family: Quranic
       fonts:
-        - asset: assets/fonts/NotoNaskhArabic-Regular.ttf
+        - asset: assets/fonts/UthmanTN_v2-0.ttf
     - family: ArabicUI
       fonts:
         - asset: assets/fonts/NotoNaskhArabic-Regular.ttf
         - asset: assets/fonts/NotoNaskhArabic-Bold.ttf
-          weight: 700
