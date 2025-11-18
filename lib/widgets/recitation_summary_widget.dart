@@ -25,7 +25,7 @@ class RecitationSummaryWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'نتائج التسجيل - سورة ${summary.surahName}',
+            'Recording Results - Surah ${summary.surahName}',
             style: const TextStyle(
               color: Color(0xFF064E3B),
               fontSize: 16,
@@ -34,18 +34,19 @@ class RecitationSummaryWidget extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          _buildStat('إجمالي الكلمات', summary.totalWords.toString()),
-          _buildStat('الكلمات الصحيحة', summary.correctWords.toString(),
+          _buildStat('Total Words', summary.totalWords.toString()),
+          _buildStat('Correct Words', summary.correctWords.toString(),
               const Color(0xFF059669)),
-          _buildStat('أخطاء التجويد', summary.errorWords.toString(),
+          _buildStat('Tajweed Errors', summary.errorWords.toString(),
               const Color(0xFFDC2626)),
-          _buildStat('دقة الترتيل', '$accuracy%', const Color(0xFF0284C7)),
+          _buildStat(
+              'Recitation Accuracy', '$accuracy%', const Color(0xFF0284C7)),
           if (summary.tajweedErrors.isNotEmpty) ...[
             const SizedBox(height: 20),
             const Divider(),
             const SizedBox(height: 20),
             const Text(
-              'تفاصيل الأخطاء:',
+              'Error Details:',
               style: TextStyle(
                 color: Color(0xFF064E3B),
                 fontWeight: FontWeight.w600,

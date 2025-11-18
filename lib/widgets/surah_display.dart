@@ -4,7 +4,8 @@ import '../models/highlighted_word.dart';
 class SurahDisplay extends StatelessWidget {
   final String surahName;
   final List<HighlightedWord> highlightedWords;
-  final ScrollController? scrollController; // optional, passed from parent for lazy loading
+  final ScrollController?
+      scrollController; // optional, passed from parent for lazy loading
 
   const SurahDisplay({
     super.key,
@@ -15,8 +16,8 @@ class SurahDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-  // Organize words into lines (max 15 lines or fewer if Surah is short)
-  final lines = _organizeIntoLines(highlightedWords);
+    // Organize words into lines (max 15 lines or fewer if Surah is short)
+    final lines = _organizeIntoLines(highlightedWords);
 
     return Column(
       children: [
@@ -32,7 +33,7 @@ class SurahDisplay extends StatelessWidget {
           textDirection: TextDirection.rtl,
         ),
         const SizedBox(height: 20),
-        
+
         // Scrollable Surah Text Container. Use provided controller if available so parent
         // can observe scroll events (for lazy loading additional lines).
         Expanded(
@@ -49,10 +50,12 @@ class SurahDisplay extends StatelessWidget {
                 ),
                 child: Column(
                   // spacing handled by SizedBox between children if needed
-                  children: lines.map((line) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6.0),
-                    child: _buildLine(context, line),
-                  )).toList(),
+                  children: lines
+                      .map((line) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6.0),
+                            child: _buildLine(context, line),
+                          ))
+                      .toList(),
                 ),
               ),
             ),
@@ -70,13 +73,14 @@ class SurahDisplay extends StatelessWidget {
     var currentLine = <HighlightedWord>[];
     var currentLineWidth = 0.0;
     const maxLineWidth = 350.0; // Approximate width per line
-    const avgWordWidth = 40.0;  // Average word width in pixels
+    const avgWordWidth = 40.0; // Average word width in pixels
 
     for (final word in words) {
       // Estimate word width (approximate)
       final wordWidth = avgWordWidth + (word.text.length * 3.5);
-      
-      if (currentLineWidth + wordWidth > maxLineWidth && currentLine.isNotEmpty) {
+
+      if (currentLineWidth + wordWidth > maxLineWidth &&
+          currentLine.isNotEmpty) {
         // Start new line
         lines.add(List<HighlightedWord>.from(currentLine));
         currentLine = [word];
@@ -108,9 +112,8 @@ class SurahDisplay extends StatelessWidget {
       spacing: 6,
       runSpacing: 8,
       alignment: WrapAlignment.center,
-      children: wordsInLine
-          .map((word) => _buildWordWidget(context, word))
-          .toList(),
+      children:
+          wordsInLine.map((word) => _buildWordWidget(context, word)).toList(),
     );
   }
 
@@ -131,7 +134,7 @@ class SurahDisplay extends StatelessWidget {
         textColor = const Color(0xFF7F1D1D);
         borderColor = const Color(0xFFDC2626);
         break;
-      case WordStatus.unrecited:
+      case WordStatus.unrecited || WordStatus.recitedNearMiss:
         backgroundColor = const Color(0xFFF3F4F6);
         textColor = const Color(0xFF374151);
         borderColor = const Color(0xFFE5E7EB);
