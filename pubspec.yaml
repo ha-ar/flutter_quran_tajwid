@@ -22,6 +22,7 @@ dependencies:
   # Audio Recording
   record: ^6.1.2
   audio_service: ^0.18.18
+  flutter_tts: ^3.8.3
 
   # Local Data Storage & Caching
   hive: ^2.2.3

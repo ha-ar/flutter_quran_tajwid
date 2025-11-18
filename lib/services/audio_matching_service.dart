@@ -9,6 +9,9 @@ class AudioMatchingService {
   // Buffer to accumulate audio chunks
   final List<int> _audioBuffer = [];
 
+  // Maximum buffer size to prevent infinite growth (5 seconds of audio)
+  static const int maxBufferSize = 160000; // 160kB = ~5 seconds at 16kHz 16-bit
+
   // Configuration for audio processing
   static const int sampleRate = 16000; // 16 kHz
   static const int bytesPerSample = 2; // 16-bit PCM
@@ -22,6 +25,13 @@ class AudioMatchingService {
   /// Add audio chunk to buffer
   void addAudioChunk(List<int> chunk) {
     _audioBuffer.addAll(chunk);
+
+    // Prevent infinite buffer growth by removing old data if buffer gets too large
+    if (_audioBuffer.length > maxBufferSize) {
+      final excessBytes = _audioBuffer.length - maxBufferSize;
+      _audioBuffer.removeRange(0, excessBytes);
+    }
+
     debugPrint('Audio buffer size: ${_audioBuffer.length} bytes');
   }
 
@@ -50,7 +60,8 @@ class AudioMatchingService {
     } else {
       _audioBuffer.removeRange(0, count);
     }
-    debugPrint('Removed $count bytes, buffer now: ${_audioBuffer.length} bytes');
+    debugPrint(
+        'Removed $count bytes, buffer now: ${_audioBuffer.length} bytes');
   }
 
   /// Clear buffer
@@ -80,10 +91,10 @@ class AudioMatchingService {
   Future<List<({int verseNumber, double score})>> matchWithVerses(
     Uint8List userAudio,
     int surahNumber, {
-    double minScore = 0.5, // Minimum score to consider a match
-    int maxMatches = 5,
-    int maxVerseToCheck = 15, // limit how many verses to iterate per call (to avoid heavy IO)
-    int windowRadius = 5, // search ±N verses around last match (sliding window)
+    double minScore = 0.3, // Optimized for speed
+    int maxMatches = 1,
+    int maxVerseToCheck = 1, // Only check one verse by default
+    int windowRadius = 0, // No window by default for speed
   }) async {
     final matches = <({int verseNumber, double score})>[];
     final durationMs = calculateDurationMs(userAudio);
@@ -93,7 +104,7 @@ class AudioMatchingService {
     // Use sliding window: if we had a recent match, search around it; otherwise start from verse 1
     int startVerse = 1;
     int endVerse = maxVerseToCheck;
-    
+
     if (_lastMatchedVerse > 0) {
       // Slide window around last matched verse
       startVerse = (_lastMatchedVerse - windowRadius).clamp(1, 286);
@@ -109,7 +120,7 @@ class AudioMatchingService {
       if (refAudio == null) continue;
 
       // Compare with full reference only (skip expensive offset loop for speed)
-      final score = AudioAnalysisService.compareAudioWaveforms(
+      final score = AudioAnalysisService.compareAudioWaveformsFast(
         userAudio,
         refAudio,
       );
@@ -166,7 +177,8 @@ class AudioMatchingService {
     for (int i = 0; i < matches.length; i++) {
       final match = matches[i];
       final percentage = (match.score * 100).toStringAsFixed(1);
-      report.writeln('${i + 1}. Verse ${match.verseNumber}: $percentage% match');
+      report
+          .writeln('${i + 1}. Verse ${match.verseNumber}: $percentage% match');
     }
 
     return report.toString();

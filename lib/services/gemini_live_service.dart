@@ -37,7 +37,8 @@ class GeminiTranscriptionMessage {
     // Handle inputTranscription format
     if (json.containsKey('inputTranscription') &&
         json['inputTranscription'] is Map) {
-      final transcriptionData = json['inputTranscription'] as Map<String, dynamic>;
+      final transcriptionData =
+          json['inputTranscription'] as Map<String, dynamic>;
       final text = transcriptionData['text'] as String? ?? '';
       final isFinal = transcriptionData['isFinal'] as bool? ?? false;
       return GeminiTranscriptionMessage(
@@ -45,7 +46,7 @@ class GeminiTranscriptionMessage {
         isFinal: isFinal,
       );
     }
-    
+
     // Handle modelTurn responses format
     if (json.containsKey('modelTurn') && json['modelTurn'] is Map) {
       final modelTurn = json['modelTurn'] as Map<String, dynamic>;
@@ -62,7 +63,7 @@ class GeminiTranscriptionMessage {
         }
       }
     }
-    
+
     // Fallback for unexpected structure
     return GeminiTranscriptionMessage(text: '', isFinal: false);
   }
@@ -71,7 +72,7 @@ class GeminiTranscriptionMessage {
 class GeminiLiveService {
   final String apiKey;
   final String model = 'gemini-2.0-flash-live-001';
-  
+
   WebSocketChannel? _channel;
   final StreamController<GeminiTranscriptionMessage> _transcriptionController =
       StreamController<GeminiTranscriptionMessage>.broadcast();
@@ -106,7 +107,8 @@ class GeminiLiveService {
 
       _isConnected = true;
       _connectionController.add(true);
-      debugPrint('[GeminiLiveService] WebSocket channel created. Sending setup message...');
+      debugPrint(
+          '[GeminiLiveService] WebSocket channel created. Sending setup message...');
 
       // Send initial setup message
       await _sendSetupMessage();
@@ -152,7 +154,7 @@ class GeminiLiveService {
           'generationConfig': {
             'responseModalities': ['TEXT'],
           },
-           'systemInstruction': {
+          'systemInstruction': {
             'parts': [
               {
                 'text':
@@ -188,10 +190,7 @@ class GeminiLiveService {
       final audioMessage = {
         'realtimeInput': {
           'mediaChunks': [
-            {
-              'data': base64Audio,
-              'mimeType': 'audio/pcm;rate=16000'
-            }
+            {'data': base64Audio, 'mimeType': 'audio/pcm;rate=16000'}
           ]
         }
       };
@@ -214,23 +213,27 @@ class GeminiLiveService {
       } else if (message is String) {
         messageString = message;
       } else {
-        debugPrint('[GeminiLiveService] Received unexpected message type: ${message.runtimeType}');
+        debugPrint(
+            '[GeminiLiveService] Received unexpected message type: ${message.runtimeType}');
         return;
       }
-      
+
       debugPrint('[GeminiLiveService] Raw message received: $messageString');
       final decoded = jsonDecode(messageString) as Map<String, dynamic>;
-      
+
       // Check for server content with transcription or text response
       if (decoded.containsKey('serverContent')) {
         final serverContent = decoded['serverContent'] as Map<String, dynamic>;
-        final transcription = GeminiTranscriptionMessage.fromJson(serverContent);
-        
+        final transcription =
+            GeminiTranscriptionMessage.fromJson(serverContent);
+
         if (transcription.text.isNotEmpty && transcription.isFinal) {
-           debugPrint('[GeminiLiveService] Parsed Text: "${transcription.text}", IsFinal: ${transcription.isFinal}');
+          debugPrint(
+              '[GeminiLiveService] Parsed Text: "${transcription.text}", IsFinal: ${transcription.isFinal}');
           _transcriptionController.add(transcription);
         } else {
-           debugPrint('[GeminiLiveService] Parsed an empty transcription message.');
+          debugPrint(
+              '[GeminiLiveService] Parsed an empty transcription message.');
         }
       }
 

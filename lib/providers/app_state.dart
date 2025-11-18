@@ -19,7 +19,8 @@ final geminiLiveServiceProvider = StateProvider<GeminiLiveService?>((ref) {
 });
 
 // Audio Recording Service Provider
-final audioRecordingServiceProvider = StateProvider<AudioRecordingService>((ref) {
+final audioRecordingServiceProvider =
+    StateProvider<AudioRecordingService>((ref) {
   return AudioRecordingService();
 });
 
@@ -45,18 +46,16 @@ final currentSurahNameProvider = StateProvider<String>((ref) {
 
 // Current Selected Surah Number (from JSON)
 final currentSurahNumberProvider = StateProvider<int>((ref) {
-  return 0;
+  return 1;
 });
-                                                                                                                                                                                                                                                                                               
+
 // Highlighted Words for display
-final highlightedWordsProvider =
-    StateProvider<List<HighlightedWord>>((ref) {
+final highlightedWordsProvider = StateProvider<List<HighlightedWord>>((ref) {
   return [];
 });
 
 // Recitation Summary
-final recitationSummaryProvider =
-    StateProvider<RecitationSummary?>((ref) {
+final recitationSummaryProvider = StateProvider<RecitationSummary?>((ref) {
   return null;
 });
 
@@ -67,7 +66,7 @@ final isRecitingProvider = StateProvider<bool>((ref) {
 
 // Status Message
 final statusMessageProvider = StateProvider<String>((ref) {
-  return 'Please select a Surah to begin.';
+  return 'Loading Surah Al-Fatiha...';
 });
 
 // Audio Level for visualization
@@ -91,12 +90,13 @@ final transcribedWordsQueueProvider = StateProvider<List<String>>((ref) {
 });
 
 // Surah names list
-final surahNamesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final surahNamesProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final quranService = ref.watch(quranJsonServiceProvider);
   try {
     await quranService.initialize();
-  final surahs = quranService.getAllSurahs();
-  return surahs;
+    final surahs = quranService.getAllSurahs();
+    return surahs;
   } catch (e, st) {
     // Log error and return empty list so UI can show a friendly state
     // (Avoid rethrowing to prevent uncaught provider errors from breaking UI)
@@ -126,30 +126,43 @@ class TranscriptionProcessor extends StateNotifier<void> {
     if (highlightedWords.isEmpty) return;
 
     final updatedWords = List<HighlightedWord>.from(highlightedWords);
-    print('processQueue: currentIndex=$currentIndex, queue.length=${queue.length}, totalWords=${highlightedWords.length}');
+    print(
+        'processQueue: currentIndex=$currentIndex, queue.length=${queue.length}, totalWords=${highlightedWords.length}');
 
     while (queue.isNotEmpty && currentIndex < highlightedWords.length) {
+      final currentWord = highlightedWords[currentIndex];
+
+      if (currentWord.isVerseMarker) {
+        print(
+            '⏭️ Skipping verse marker at index $currentIndex: text="${currentWord.text}"');
+        currentIndex++;
+        continue;
+      }
+
       // Use simpleText for comparison (clean text without diacritics/markers)
-      final expectedWord = normalizeArabic(highlightedWords[currentIndex].simpleText);
-      
-      // Skip verse markers (they have empty or numeric simpleText)
-      if (expectedWord.isEmpty || RegExp(r'^[\d٠-٩]+$').hasMatch(expectedWord)) {
-        print('⏭️ Skipping verse marker at index $currentIndex: text="${highlightedWords[currentIndex].text}", simpleText="$expectedWord"');
-        // Mark as unrecited but visible (not part of recitation matching)
+      final expectedWord = normalizeArabic(currentWord.simpleText);
+
+      // Skip any remaining non-pronounceable markers
+      if (expectedWord.isEmpty ||
+          RegExp(r'^[\d٠-٩]+$').hasMatch(expectedWord)) {
+        print(
+            '⏭️ Skipping non-recitable token at index $currentIndex: text="${currentWord.text}", simpleText="$expectedWord"');
         currentIndex++;
         continue;
       }
 
       final transcribedWord = normalizeArabic(queue.removeAt(0));
-      print('Comparing: transcribed="$transcribedWord" vs expected="$expectedWord" (simpleText, index=$currentIndex)');
-      print('Display text: "${highlightedWords[currentIndex].text}"');
+      print(
+          'Comparing: transcribed="$transcribedWord" vs expected="$expectedWord" (simpleText, index=$currentIndex, verse=${currentWord.verseNumber})');
+      print('Display text: "${currentWord.text}"');
 
       if (transcribedWord.isEmpty) {
         continue;
       }
 
       // Use fuzzy matching for more lenient error detection
-      final similarityScore = _calculateSimilarity(transcribedWord, expectedWord);
+      final similarityScore =
+          _calculateSimilarity(transcribedWord, expectedWord);
       print('Similarity score: $similarityScore');
 
       // Mark as correct if similarity is high enough (>= 80%)
@@ -179,11 +192,12 @@ class TranscriptionProcessor extends StateNotifier<void> {
       // Mark as error (significant mismatch)
       else {
         print('❌ Match failed (similarity < 0.6)');
-        if (updatedWords[currentIndex].status != WordStatus.recitedTajweedError) {
+        if (updatedWords[currentIndex].status !=
+            WordStatus.recitedTajweedError) {
           updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
             status: WordStatus.recitedTajweedError,
             tajweedError:
-                'Expected: "${highlightedWords[currentIndex].simpleText}", Heard: "$transcribedWord"',
+                'Expected: "${currentWord.simpleText}", Heard: "$transcribedWord"',
           );
         }
         currentIndex++;

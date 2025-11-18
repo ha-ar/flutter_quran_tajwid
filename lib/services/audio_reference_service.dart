@@ -33,7 +33,8 @@ class AudioReferenceService {
       }
     }
 
-    final path = 'assets/audio/surah_${surahNumber.toString().padLeft(3, '0')}/verse_${verseNumber.toString().padLeft(3, '0')}.pcm';
+    final path =
+        'assets/audio/surah_${surahNumber.toString().padLeft(3, '0')}/verse_${verseNumber.toString().padLeft(3, '0')}.pcm';
 
     final future = () async {
       try {
@@ -41,10 +42,12 @@ class AudioReferenceService {
         final audioBytes = data.buffer.asUint8List();
         _audioCache[cacheKey] = audioBytes;
         // Single debug print when freshly loaded
-        debugPrint('Loaded reference audio: $path (${audioBytes.length} bytes)');
+        debugPrint(
+            'Loaded reference audio: $path (${audioBytes.length} bytes)');
         return audioBytes;
       } catch (e) {
-        debugPrint('Failed to load reference audio for S$surahNumber:V$verseNumber: $e');
+        debugPrint(
+            'Failed to load reference audio for S$surahNumber:V$verseNumber: $e');
         return null;
       } finally {
         // remove in-flight marker
@@ -80,17 +83,18 @@ class AudioReferenceService {
 
   /// Compare user's recorded audio segment with reference audio
   /// Returns similarity score (0.0 to 1.0)
+  /// Uses ultra-fast comparison with aggressive downsampling for real-time performance
   static double compareRecitationWithReference(
     Uint8List userAudio,
     Uint8List referenceAudio,
   ) {
-    return AudioAnalysisService.compareAudioWaveforms(userAudio, referenceAudio);
+    return AudioAnalysisService.compareAudioWaveformsUltraFast(
+        userAudio, referenceAudio);
   }
 
   /// Find best matching reference audio segment for user audio
   /// Tries all verses in a surah and returns the best match
-  static Future<({int verseNumber, double score})?>
-      findBestVerseMatch(
+  static Future<({int verseNumber, double score})?> findBestVerseMatch(
     int surahNumber,
     Uint8List userAudio, {
     int maxVerses = 286, // Maximum verses in Quran
