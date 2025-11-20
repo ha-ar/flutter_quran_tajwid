@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart';
 import '../models/highlighted_word.dart';
 import '../models/recitation_summary.dart';
 import '../models/surah.dart';
@@ -101,8 +102,7 @@ final surahNamesProvider =
     // Log error and return empty list so UI can show a friendly state
     // (Avoid rethrowing to prevent uncaught provider errors from breaking UI)
     // Print for debugging in logs
-    // ignore: avoid_print
-    print('surahNamesProvider: failed to load Quran JSON: $e\n$st');
+    debugPrint('surahNamesProvider: failed to load Quran JSON: $e\n$st');
     return <Map<String, dynamic>>[];
   }
 });
@@ -126,14 +126,14 @@ class TranscriptionProcessor extends StateNotifier<void> {
     if (highlightedWords.isEmpty) return;
 
     final updatedWords = List<HighlightedWord>.from(highlightedWords);
-    print(
+    debugPrint(
         'processQueue: currentIndex=$currentIndex, queue.length=${queue.length}, totalWords=${highlightedWords.length}');
 
     while (queue.isNotEmpty && currentIndex < highlightedWords.length) {
       final currentWord = highlightedWords[currentIndex];
 
       if (currentWord.isVerseMarker) {
-        print(
+        debugPrint(
             '⏭️ Skipping verse marker at index $currentIndex: text="${currentWord.text}"');
         currentIndex++;
         continue;
@@ -145,16 +145,16 @@ class TranscriptionProcessor extends StateNotifier<void> {
       // Skip any remaining non-pronounceable markers
       if (expectedWord.isEmpty ||
           RegExp(r'^[\d٠-٩]+$').hasMatch(expectedWord)) {
-        print(
+        debugPrint(
             '⏭️ Skipping non-recitable token at index $currentIndex: text="${currentWord.text}", simpleText="$expectedWord"');
         currentIndex++;
         continue;
       }
 
       final transcribedWord = normalizeArabic(queue.removeAt(0));
-      print(
+      debugPrint(
           'Comparing: transcribed="$transcribedWord" vs expected="$expectedWord" (simpleText, index=$currentIndex, verse=${currentWord.verseNumber})');
-      print('Display text: "${currentWord.text}"');
+      debugPrint('Display text: "${currentWord.text}"');
 
       if (transcribedWord.isEmpty) {
         continue;
@@ -163,12 +163,12 @@ class TranscriptionProcessor extends StateNotifier<void> {
       // Use fuzzy matching for more lenient error detection
       final similarityScore =
           _calculateSimilarity(transcribedWord, expectedWord);
-      print('Similarity score: $similarityScore');
+      debugPrint('Similarity score: $similarityScore');
 
       // Mark as correct if similarity is high enough (>= 80%)
       // This accounts for minor pronunciation variations in Tajweed
       if (similarityScore >= 0.8) {
-        print('✅ Match accepted (similarity >= 0.8)');
+        debugPrint('✅ Match accepted (similarity >= 0.8)');
         if (updatedWords[currentIndex].status != WordStatus.recitedCorrect) {
           updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
             status: WordStatus.recitedCorrect,
@@ -179,7 +179,7 @@ class TranscriptionProcessor extends StateNotifier<void> {
       }
       // Mark as partial match (pronunciation close but not exact)
       else if (similarityScore >= 0.6) {
-        print('⚠️ Partial match (similarity 0.6-0.8)');
+        debugPrint('⚠️ Partial match (similarity 0.6-0.8)');
         if (updatedWords[currentIndex].status != WordStatus.recitedCorrect) {
           updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
             status: WordStatus.recitedTajweedError,
@@ -191,7 +191,7 @@ class TranscriptionProcessor extends StateNotifier<void> {
       }
       // Mark as error (significant mismatch)
       else {
-        print('❌ Match failed (similarity < 0.6)');
+        debugPrint('❌ Match failed (similarity < 0.6)');
         if (updatedWords[currentIndex].status !=
             WordStatus.recitedTajweedError) {
           updatedWords[currentIndex] = updatedWords[currentIndex].copyWith(
@@ -204,7 +204,7 @@ class TranscriptionProcessor extends StateNotifier<void> {
       }
     }
 
-    print('processQueue complete: newIndex=$currentIndex');
+    debugPrint('processQueue complete: newIndex=$currentIndex');
     ref.read(nextWordIndexProvider.notifier).state = currentIndex;
     ref.read(transcribedWordsQueueProvider.notifier).state = queue;
     ref.read(highlightedWordsProvider.notifier).state = updatedWords;

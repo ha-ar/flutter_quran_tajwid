@@ -13,16 +13,14 @@ import '../services/quran_json_service.dart';
 import '../utils/arabic_utils.dart';
 
 class RecitationScreen extends ConsumerStatefulWidget {
-  const RecitationScreen({super.key});
+  final int pageNumber;
+  const RecitationScreen({super.key, required this.pageNumber});
 
   @override
   ConsumerState<RecitationScreen> createState() => _RecitationScreenState();
 }
 
 class _RecitationScreenState extends ConsumerState<RecitationScreen> {
-  static const int _surahNumber = 1;
-  static const Duration _matchThrottle =
-      Duration(milliseconds: 500); // Increased from 100ms
   static const int _segmentDurationMs =
       500; // Reduced from 2000ms for faster processing
 
@@ -39,26 +37,13 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
   int? _activeVerse;
   int _nextVerseToDetect = 1;
   int _maxVerseNumber = 7;
-  bool _verseDetectionEnabled =
-      true; // Controls sequential verse inference enablement
+  // Surah tracking for multi-surah pages
+  late Map<int, int> _surahMaxVerses; // surahNumber -> max verse
+  late Map<int, String> _surahNames; // surahNumber -> name
+  late List<int> _surahOrder; // appearance order on this page
+  int _currentSurahIndex = 0;
+  int _currentSurahNumber = 0;
   // bool _awaitingTranscription = false; // Reserved for streaming state tracking.
-
-  void _provideAudibleFeedback(WordStatus status) {
-    switch (status) {
-      case WordStatus.recitedCorrect:
-        _feedbackSpeechService.speakStatus('correct');
-        break;
-      case WordStatus.recitedNearMiss:
-        _feedbackSpeechService.speakStatus('near');
-        break;
-      case WordStatus.recitedTajweedError:
-        _feedbackSpeechService.speakStatus('error');
-        break;
-      case WordStatus.unrecited:
-        // Skip live unrecited feedback to prevent noise.
-        break;
-    }
-  }
 
   @override
   void initState() {
@@ -70,29 +55,51 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
 
   Future<void> _bootstrap() async {
     await _audioRecordingService.initialize();
-    await _loadSurah();
+    await _loadPage();
   }
 
-  Future<void> _loadSurah() async {
+  Future<void> _loadPage() async {
     final quranService = ref.read(quranJsonServiceProvider);
-    final surah = quranService.getSurah(_surahNumber);
-    final surahName = surah?.surahName ?? 'Al-Fatiha';
-    final words = quranService.getSurahWords(_surahNumber);
+    // Ensure initialized
+    await quranService.initialize();
 
-    if (words.isNotEmpty) {
-      var maxVerse = 0;
-      for (final word in words) {
-        if (word.verseNumber > maxVerse) {
-          maxVerse = word.verseNumber;
-        }
-      }
-      _maxVerseNumber = maxVerse;
-    } else {
-      _maxVerseNumber = 7;
+    final page = quranService.getPage(widget.pageNumber);
+    if (page == null) {
+      ref.read(statusMessageProvider.notifier).state = 'Page not found';
+      setState(() {
+        _isLoadingSurah = false;
+      });
+      return;
     }
 
-    _nextVerseToDetect = 1;
-    _verseDetectionEnabled = true;
+    final words = page.getAllWords();
+    // Use the first surah name on the page for display
+    final surahName =
+        page.chapters.isNotEmpty ? page.chapters.first.surahName : '';
+
+    // Build per-surah metadata (pages may contain multiple surahs)
+    _surahMaxVerses = {};
+    _surahNames = {};
+    _surahOrder = [];
+    for (final chapter in page.chapters) {
+      _surahOrder.add(chapter.surahNumber);
+      _surahNames[chapter.surahNumber] = chapter.surahName;
+      int maxVerse = 0;
+      for (final v in chapter.verses) {
+        if (v.verseNumber > maxVerse) maxVerse = v.verseNumber;
+      }
+      _surahMaxVerses[chapter.surahNumber] = maxVerse;
+    }
+    if (_surahOrder.isEmpty) {
+      _maxVerseNumber = 0;
+      _currentSurahNumber = 0;
+    } else {
+      _currentSurahIndex = 0;
+      _currentSurahNumber = _surahOrder.first;
+      _maxVerseNumber = _surahMaxVerses[_currentSurahNumber] ?? 0;
+    }
+
+    _nextVerseToDetect = 1; // Always start at verse 1 of first surah on page
     _activeVerse = null;
 
     final highlighted = <HighlightedWord>[];
@@ -106,6 +113,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
           status: WordStatus.unrecited,
           tajweedError: null,
           verseNumber: word.verseNumber,
+          surahNumber: word.surahNumber,
+          lineNumber: word.lineNumber,
           wordIndex: i,
           isVerseMarker: isMarker,
         ),
@@ -113,10 +122,12 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     }
 
     ref.read(highlightedWordsProvider.notifier).state = highlighted;
-    ref.read(currentSurahNumberProvider.notifier).state = _surahNumber;
-    ref.read(currentSurahNameProvider.notifier).state = surahName;
+    // Track current (first) surah on this page
+    ref.read(currentSurahNumberProvider.notifier).state = _currentSurahNumber;
+    ref.read(currentSurahNameProvider.notifier).state =
+        _surahNames[_currentSurahNumber] ?? surahName;
     ref.read(statusMessageProvider.notifier).state =
-        'Ready to recite Surah Al-Fatiha';
+        'Ready to recite Page ${widget.pageNumber}';
 
     if (mounted) {
       setState(() {
@@ -157,11 +168,11 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
       );
     }
 
-    final verseGroups = _groupWordsByVerse(highlightedWords);
+    final lineGroups = _groupWordsByLine(highlightedWords);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Recitation Test'),
+        title: Text('Page ${widget.pageNumber}'),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -171,7 +182,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                surahName.isEmpty ? 'Surah Al-Fatiha' : surahName,
+                surahName.isEmpty ? 'Quran Recitation' : surahName,
                 style: Theme.of(context).textTheme.headlineSmall,
                 textAlign: TextAlign.center,
               ),
@@ -179,17 +190,25 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
               _buildStatusBanner(statusMessage),
               const SizedBox(height: 16),
               Expanded(
-                child: verseGroups.isEmpty
+                child: lineGroups.isEmpty
                     ? const Center(child: CircularProgressIndicator())
-                    : ListView(
-                        children: verseGroups.entries
-                            .map(
-                              (entry) => _buildVerseTile(
-                                entry.key,
-                                entry.value,
-                              ),
-                            )
-                            .toList(),
+                    : Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBF0), // Cream background
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                        ),
+                        child: ListView(
+                          children: lineGroups.entries
+                              .map(
+                                (entry) => _buildLineRow(
+                                  entry.key,
+                                  entry.value,
+                                ),
+                              )
+                              .toList(),
+                        ),
                       ),
               ),
               const SizedBox(height: 16),
@@ -257,15 +276,12 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     );
   }
 
-  Map<int, List<HighlightedWord>> _groupWordsByVerse(
+  Map<int, List<HighlightedWord>> _groupWordsByLine(
     List<HighlightedWord> words,
   ) {
     final grouped = <int, List<HighlightedWord>>{};
     for (final word in words) {
-      if (word.isVerseMarker) {
-        continue;
-      }
-      grouped.putIfAbsent(word.verseNumber, () => []).add(word);
+      grouped.putIfAbsent(word.lineNumber, () => []).add(word);
     }
 
     final sortedKeys = grouped.keys.toList()..sort();
@@ -276,65 +292,17 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     return sortedMap;
   }
 
-  Widget _buildVerseTile(int verseNumber, List<HighlightedWord> words) {
-    final isActive = _activeVerse == verseNumber;
+  Widget _buildLineRow(int lineNumber, List<HighlightedWord> words) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isActive ? const Color(0xFF0284C7) : const Color(0xFFE5E7EB),
-          width: isActive ? 2 : 1,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14000000),
-            offset: Offset(0, 2),
-            blurRadius: 4,
-          ),
-        ],
-      ),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: Directionality(
         textDirection: TextDirection.rtl,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildVerseNumberChip(verseNumber, isActive),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.start,
-                children: words.map(_buildWordChip).toList(),
-              ),
-            ),
-          ],
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 4,
+          runSpacing: 4,
+          children: words.map(_buildWordChip).toList(),
         ),
-      ),
-    );
-  }
-
-  Widget _buildVerseNumberChip(int verseNumber, bool isActive) {
-    final color = isActive ? const Color(0xFF0284C7) : const Color(0xFF0F172A);
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: isActive ? const Color(0xFFE0F2FE) : const Color(0xFFF3F4F6),
-        border: Border.all(color: color, width: 1.5),
-      ),
-      child: Text(
-        verseNumber.toString(),
-        style: TextStyle(
-          fontFamily: 'ArabicUI',
-          fontWeight: FontWeight.bold,
-          color: color,
-          fontSize: 16,
-        ),
-        textDirection: TextDirection.rtl,
       ),
     );
   }
@@ -469,7 +437,6 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
 
     _activeVerse = null;
     _nextVerseToDetect = 1;
-    _verseDetectionEnabled = true;
 
     ref.read(isRecitingProvider.notifier).state = true;
     ref.read(statusMessageProvider.notifier).state = 'Listening...';
@@ -560,24 +527,34 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
   }
 
   void _handleTranscription(GeminiTranscriptionMessage message) {
+    // Debug: log all transcriptions to see if they're arriving
+    debugPrint(
+        '[Transcription] Received: "${message.text}", isFinal: ${message.isFinal}');
+
     if (!message.isFinal) {
       return;
     }
 
     final text = message.text.trim();
     if (text.isEmpty) {
+      debugPrint('[Transcription] Empty final transcription, skipping');
       return;
     }
+
+    debugPrint('[Transcription] Processing final transcription: "$text"');
 
     // SKIP AUDIO MATCHING: Always infer verse from transcription
     int? verseNumber = _inferVerseFromTranscription(text);
 
     if (verseNumber == null) {
       // Could not determine verse - might be starting or noise
+      debugPrint('[Transcription] ✗ Could not infer verse from transcription');
       ref.read(statusMessageProvider.notifier).state =
           'Listening... (transcribed: $text)';
       return;
     }
+
+    debugPrint('[Transcription] ✓ Inferred verse: $verseNumber');
 
     // Set active verse if detected
     if (_activeVerse != verseNumber) {
@@ -601,16 +578,22 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
         .toList();
 
     if (tokens.isEmpty) {
+      debugPrint('[Inference] No tokens after normalization');
       return null;
     }
 
-    debugPrint('Inferring verse from tokens: $tokens');
+    debugPrint('[Inference] Tokens: $tokens');
+    debugPrint(
+        '[Inference] Looking for verse, _nextVerseToDetect: $_nextVerseToDetect');
 
     final allWords = ref.read(highlightedWordsProvider);
+    final currentSurah = _currentSurahNumber;
     final verseCandidates = <int, int>{}; // verse number -> match count
 
     // Count how many tokens match words in each verse (only unrecited words)
     for (final word in allWords) {
+      // Restrict matching to current surah only
+      if (word.surahNumber != currentSurah) continue;
       if (word.isVerseMarker || word.status == WordStatus.recitedCorrect) {
         continue;
       }
@@ -628,6 +611,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
               normalized.contains(token)) {
             verseCandidates[word.verseNumber] =
                 (verseCandidates[word.verseNumber] ?? 0) + 1;
+            debugPrint(
+                '[Inference] Match found: token="$token" matches word="${word.text}" (verse ${word.verseNumber})');
             break; // Count each word once per verse
           }
         }
@@ -635,11 +620,11 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     }
 
     if (verseCandidates.isEmpty) {
-      debugPrint('No verse candidates found');
+      debugPrint('[Inference] No verse candidates found');
       return null;
     }
 
-    debugPrint('Verse candidates: $verseCandidates');
+    debugPrint('[Inference] Verse candidates: $verseCandidates');
 
     // Prefer the next expected verse if it has good matches
     if (verseCandidates.containsKey(_nextVerseToDetect)) {
@@ -647,7 +632,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
       // If expected verse has at least 1 match, use it
       if (expectedVerseMatches > 0) {
         debugPrint(
-            'Using expected verse $_nextVerseToDetect with $expectedVerseMatches matches');
+            '[Inference] ✓ Using expected verse $_nextVerseToDetect with $expectedVerseMatches matches');
         return _nextVerseToDetect;
       }
     }
@@ -663,7 +648,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
       }
     }
 
-    debugPrint('Best verse: $bestVerse with $bestCount matches');
+    debugPrint('[Inference] ✓ Best verse: $bestVerse with $bestCount matches');
     return bestVerse;
   }
 
@@ -683,9 +668,12 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     );
     final verseIndices = <int>[];
 
+    final currentSurah = _currentSurahNumber;
     for (var i = 0; i < allWords.length; i++) {
       final word = allWords[i];
-      if (word.verseNumber == verseNumber && !word.isVerseMarker) {
+      if (word.surahNumber == currentSurah &&
+          word.verseNumber == verseNumber &&
+          !word.isVerseMarker) {
         verseIndices.add(i);
       }
     }
@@ -808,29 +796,43 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
       _activeVerse = null;
 
       if (verseNumber < _maxVerseNumber) {
-        _nextVerseToDetect = verseNumber + 1; // Always go to next verse
-        _verseDetectionEnabled = true;
+        // Continue within current surah
+        _nextVerseToDetect = verseNumber + 1;
         message = finalErrorCount > 0
-            ? 'Verse $verseNumber: $finalErrorCount words not recognized - ready for verse $_nextVerseToDetect'
-            : 'Verse $verseNumber: completed successfully - ready for verse $_nextVerseToDetect';
-        debugPrint('✓ Verse $verseNumber complete. Next: $_nextVerseToDetect');
+            ? 'Surah ${_surahNames[_currentSurahNumber]} verse $verseNumber done with $finalErrorCount errors - ready for verse $_nextVerseToDetect'
+            : 'Surah ${_surahNames[_currentSurahNumber]} verse $verseNumber completed - ready for verse $_nextVerseToDetect';
+        debugPrint(
+            '✓ Surah $_currentSurahNumber verse $verseNumber complete. Next verse: $_nextVerseToDetect');
       } else {
-        _verseDetectionEnabled = false;
-        _nextVerseToDetect = _maxVerseNumber;
-        message = finalErrorCount > 0
-            ? 'Surah completed with errors in $finalErrorCount words'
-            : 'Surah Al-Fatiha completed successfully';
-        debugPrint('✓ Surah complete!');
-
-        // Show summary report after a short delay
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            _showSummaryReport();
-          }
-        });
+        // Surah finished - advance to next surah on page if any
+        if (_currentSurahIndex < _surahOrder.length - 1) {
+          _currentSurahIndex++;
+          _currentSurahNumber = _surahOrder[_currentSurahIndex];
+          _maxVerseNumber = _surahMaxVerses[_currentSurahNumber] ?? 0;
+          _nextVerseToDetect = 1;
+          message = finalErrorCount > 0
+              ? 'Surah ${_surahNames[_surahOrder[_currentSurahIndex - 1]]} finished with $finalErrorCount errors - start Surah ${_surahNames[_currentSurahNumber]} verse 1'
+              : 'Surah ${_surahNames[_surahOrder[_currentSurahIndex - 1]]} finished - start Surah ${_surahNames[_currentSurahNumber]} verse 1';
+          debugPrint('✓ Surah transition: now surah $_currentSurahNumber');
+          // Update providers for new surah name/number
+          ref.read(currentSurahNumberProvider.notifier).state =
+              _currentSurahNumber;
+          ref.read(currentSurahNameProvider.notifier).state =
+              _surahNames[_currentSurahNumber] ?? '';
+        } else {
+          // Last surah on page completed
+          message = finalErrorCount > 0
+              ? 'Page ${widget.pageNumber} complete with $finalErrorCount missed words'
+              : 'Page ${widget.pageNumber} completed successfully';
+          debugPrint('✓ Page ${widget.pageNumber} complete!');
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              _showSummaryReport();
+            }
+          });
+        }
       }
     } else {
-      _verseDetectionEnabled = true;
       debugPrint(
           'Verse $verseNumber: Still has unrecited words, waiting for more transcription');
     }
@@ -1235,7 +1237,6 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
         'Ready to recite Surah Al-Fatiha';
     _activeVerse = null;
     _nextVerseToDetect = 1;
-    _verseDetectionEnabled = true;
   }
 
   @override

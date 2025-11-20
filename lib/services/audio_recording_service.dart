@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:record/record.dart';
 import 'package:flutter/foundation.dart';
 
@@ -58,7 +57,6 @@ class AudioRecordingService {
           _isRecording = false;
         },
       );
-
     } catch (e) {
       onError('Failed to start recording: $e');
       _isRecording = false;
@@ -75,6 +73,7 @@ class AudioRecordingService {
       debugPrint('Error stopping recording: $e');
     }
   }
+
   bool get isRecording => _isRecording;
 
   Future<void> dispose() async {

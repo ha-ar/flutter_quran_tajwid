@@ -28,8 +28,12 @@ double arabicSimilarity(String a, String b) {
   final len2 = s2.length;
   // Initialize DP matrix
   final dp = List.generate(len1 + 1, (_) => List<int>.filled(len2 + 1, 0));
-  for (var i = 0; i <= len1; i++) dp[i][0] = i;
-  for (var j = 0; j <= len2; j++) dp[0][j] = j;
+  for (var i = 0; i <= len1; i++) {
+    dp[i][0] = i;
+  }
+  for (var j = 0; j <= len2; j++) {
+    dp[0][j] = j;
+  }
   for (var i = 1; i <= len1; i++) {
     for (var j = 1; j <= len2; j++) {
       final cost = s1[i - 1] == s2[j - 1] ? 0 : 1;

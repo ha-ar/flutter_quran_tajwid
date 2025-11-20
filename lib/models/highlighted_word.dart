@@ -12,6 +12,8 @@ class HighlightedWord {
   final WordStatus status;
   final String? tajweedError;
   final int verseNumber; // Verse the word belongs to (1-based)
+  final int surahNumber; // Surah the word belongs to
+  final int lineNumber; // Line number on the page (1-15)
   final int wordIndex; // Position of the word within the Surah
   final bool
       isVerseMarker; // True when this entry represents a verse marker/number
@@ -22,6 +24,8 @@ class HighlightedWord {
     required this.status,
     this.tajweedError,
     required this.verseNumber,
+    required this.surahNumber,
+    required this.lineNumber,
     required this.wordIndex,
     this.isVerseMarker = false,
   });
@@ -32,6 +36,8 @@ class HighlightedWord {
     WordStatus? status,
     String? tajweedError,
     int? verseNumber,
+    int? surahNumber,
+    int? lineNumber,
     int? wordIndex,
     bool? isVerseMarker,
   }) {
@@ -41,6 +47,8 @@ class HighlightedWord {
       status: status ?? this.status,
       tajweedError: tajweedError ?? this.tajweedError,
       verseNumber: verseNumber ?? this.verseNumber,
+      surahNumber: surahNumber ?? this.surahNumber,
+      lineNumber: lineNumber ?? this.lineNumber,
       wordIndex: wordIndex ?? this.wordIndex,
       isVerseMarker: isVerseMarker ?? this.isVerseMarker,
     );

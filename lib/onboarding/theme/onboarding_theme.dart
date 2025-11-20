@@ -16,7 +16,6 @@ ThemeData buildOnboardingTheme() {
     colorScheme: base.colorScheme.copyWith(
       primary: OnboardingColors.primary,
       surface: OnboardingColors.card,
-      background: OnboardingColors.background,
       onPrimary: Colors.white,
       onSurface: OnboardingColors.textPrimary,
     ),

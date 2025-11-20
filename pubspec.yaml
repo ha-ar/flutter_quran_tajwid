@@ -1,8 +1,10 @@
 name: flutter_quran_tajwid
-description: "Flutter Quran Tajweed Recitation Assistant with Gemini Live API"
-publish_to: 'none'
+description: A Flutter package for real-time Quranic recitation analysis with AI-powered transcription, Tajweed error detection, and word-by-word highlighting. Displays 15-line page layout with complete Quran (604 pages).
+repository: https://github.com/ha-ar/flutter_quran_tajwid
+homepage: https://github.com/ha-ar/flutter_quran_tajwid
+issue_tracker: https://github.com/ha-ar/flutter_quran_tajwid/issues
 
-version: 1.0.0+1
+version: 1.0.0
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -46,7 +48,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - .env
     - lib/utils/quran_text.json
     - assets/audio/
     - assets/fonts/

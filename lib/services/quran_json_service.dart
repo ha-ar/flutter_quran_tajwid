@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class QuranWord {
@@ -147,26 +148,28 @@ class QuranJsonService {
     if (_isInitialized) return;
 
     try {
-      print('Loading Quran JSON...');
-      final jsonString = await rootBundle.loadString('lib/utils/quran_text.json');
-      print('JSON loaded, length: ${jsonString.length}');
+      debugPrint('Loading Quran JSON...');
+      // When loading assets from a package, we must specify the package name
+      final jsonString = await rootBundle.loadString(
+          'packages/flutter_quran_tajwid/lib/utils/quran_text.json');
+      debugPrint('JSON loaded, length: ${jsonString.length}');
       final json = jsonDecode(jsonString) as Map<String, dynamic>;
       final data = json['data'] as List<dynamic>?;
 
       if (data != null) {
-        print('Parsing ${data.length} pages...');
+        debugPrint('Parsing ${data.length} pages...');
         _allPages = data
             .map((p) => QuranPage.fromJson(p as Map<String, dynamic>))
             .toList();
         _isInitialized = true;
-        print('Successfully loaded ${_allPages.length} pages');
+        debugPrint('Successfully loaded ${_allPages.length} pages');
       } else {
-        print('Error: data field is null in JSON');
+        debugPrint('Error: data field is null in JSON');
         _allPages = [];
       }
     } catch (e, stackTrace) {
-      print('Error loading Quran JSON: $e');
-      print('Stack trace: $stackTrace');
+      debugPrint('Error loading Quran JSON: $e');
+      debugPrint('Stack trace: $stackTrace');
       _allPages = [];
       rethrow; // Re-throw to let the FutureProvider handle the error
     }
@@ -214,7 +217,8 @@ class QuranJsonService {
 
   /// Get all surahs with their names and numbers
   List<Map<String, dynamic>> getAllSurahs() {
-    print('getAllSurahs called, _allPages.length: ${_allPages.length}, initialized: $_isInitialized');
+    debugPrint(
+        'getAllSurahs called, _allPages.length: ${_allPages.length}, initialized: $_isInitialized');
     final surahs = <Map<String, dynamic>>[];
     final seenSurahs = <int>{};
 
@@ -230,7 +234,7 @@ class QuranJsonService {
         }
       }
     }
-    print('Found ${surahs.length} unique surahs');
+    debugPrint('Found ${surahs.length} unique surahs');
     return surahs;
   }
 
@@ -253,24 +257,26 @@ class QuranJsonService {
       // Check simpleText for verse numbers (more reliable than text)
       final cleanText = word.simpleText.trim();
       final displayText = word.text.trim();
-      
+
       // Filter out verse numbers (Arabic numerals ٠-٩ or English 0-9)
       if (RegExp(r'^[\d٠-٩]+$').hasMatch(cleanText)) {
-        print('Filtering out verse number: simpleText="$cleanText", text="$displayText"');
+        debugPrint(
+            'Filtering out verse number: simpleText="$cleanText", text="$displayText"');
         return false;
       }
-      
+
       // Filter out verse ending marks and special symbols
       if (RegExp(r'^[۟۞۝﴾﴿\s]*$').hasMatch(displayText)) {
-        print('Filtering out verse marker: text="$displayText"');
+        debugPrint('Filtering out verse marker: text="$displayText"');
         return false;
       }
-      
+
       // Keep all actual words
       return true;
     }).toList();
-    
-    print('Filtered ${words.length - filtered.length} verse markers, kept ${filtered.length} actual words');
+
+    debugPrint(
+        'Filtered ${words.length - filtered.length} verse markers, kept ${filtered.length} actual words');
     return filtered;
   }
 }

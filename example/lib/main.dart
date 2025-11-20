@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'services/quran_json_service.dart';
-import 'screens/recitation_screen.dart';
+import 'package:flutter_quran_tajwid/flutter_quran_tajwid.dart';
 
 void main() async {
-  await dotenv.load();
+  // Ensure widgets are initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Load environment variables
+  // Note: In a real app, you should handle the .env file properly.
+  // For this example, we assume .env is available in assets.
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint("Warning: .env file not found. Some features might not work.");
+  }
+
   // Initialize JSON-based Quran data
   await QuranJsonService().initialize();
-  runApp(
-    const ProviderScope(
-      child: MyApp(),
-    ),
-  );
+
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {
@@ -67,8 +74,10 @@ class MyApp extends StatelessWidget {
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
             fillColor: Colors.white,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 8,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -84,7 +93,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const RecitationScreen(),
+      home: const RecitationScreen(pageNumber: 610),
     );
   }
 }
