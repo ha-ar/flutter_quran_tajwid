@@ -140,7 +140,7 @@ class AudioAnalysisService {
     if (samples1.isEmpty || samples2.isEmpty) return 0.0;
 
     // Downsample for speed (take every 4th sample)
-    final step = 4;
+    const step = 4;
     double sumProduct = 0.0;
     double sum1Sq = 0.0;
     double sum2Sq = 0.0;
