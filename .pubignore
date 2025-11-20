@@ -1,0 +1,22 @@
+# Exclude audio files from published package (too large for pub.dev)
+assets/audio/
+
+# Exclude build artifacts
+build/
+.dart_tool/
+
+# Exclude development files
+example/.dart_tool/
+example/build/
+chrome/
+
+# Exclude documentation files (keep only essential ones)
+DEBUG_*.md
+HIGHLIGHTING_*.md
+ANSWER_*.md
+
+# Exclude scripts
+scripts/
+
+# Exclude test files from chrome directory
+chrome/test/

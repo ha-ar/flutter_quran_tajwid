@@ -1,178 +1,97 @@
-# معلم التجويد - Flutter Quran Tajweed Recitation Assistant# معلم التجويد - Flutter Quran Tajweed Recitation Assistant
+# معلم التجويد - Flutter Quran Tajweed Recitation Assistant
 
+A Flutter package for real-time Quranic recitation analysis using Google Gemini's Live API for Arabic transcription.
 
+## 🎯 Key Features
 
-A Flutter package for real-time Quranic recitation analysis using Google Gemini's Live API for Arabic transcription.A modern Flutter application for real-time Quranic recitation analysis using Google Gemini's Live API for Arabic transcription.
+- **Real-time Transcription**: Uses Gemini Live API for instant Arabic speech-to-text
+- **Page-Based Display**: 15-line layout matching traditional Mushaf format (604 pages)
+- **Complete Quran Data**: All 604 pages with surah and verse metadata
+- **Word-by-Word Highlighting**: Visual feedback as you recite with color-coded accuracy
+- **Tajweed Error Detection**: Identifies pronunciation mismatches
+- **Quranic Typography**: Authentic Uthmanic Hafs font for Quran verses
+- **Clean UI**: Modern Material Design 3 with Arabic language support
+- **Recitation Statistics**: Accuracy metrics and detailed error summary
+- **Cross-Platform**: iOS, Android support
 
+## 📦 Installation
 
+Add this to your package's `pubspec.yaml` file:
 
-## 🎯 Key Features## 🎯 Key Features
-
-
-
-- **Real-time Transcription**: Uses Gemini Live API for instant Arabic speech-to-text- **Real-time Transcription**: Uses Gemini Live API for instant Arabic speech-to-text
-
-- **Complete Quran Data**: All 114 Surahs with local caching- **Complete Quran Data**: All 114 Surahs with local caching
-
-- **Word-by-Word Highlighting**: Visual feedback as you recite with color-coded accuracy- **Word-by-Word Highlighting**: Visual feedback as you recite with color-coded accuracy
-
-- **Tajweed Error Detection**: Identifies pronunciation mismatches- **Tajweed Error Detection**: Identifies pronunciation mismatches
-
-- **Quranic Typography**: Authentic Uthmanic Hafs font for Quran verses- **Quranic Typography**: Authentic Uthmanic Hafs font for Quran verses
-
-- **Clean UI**: Modern Material Design 3 with Arabic language support- **Clean UI**: Modern Material Design 3 with Arabic language support
-
-- **Default Microphone**: Automatically uses device default microphone- **Default Microphone**: Automatically uses device default microphone
-
-- **Recitation Statistics**: Accuracy metrics and detailed error summary- **Recitation Statistics**: Accuracy metrics and detailed error summary
-
-- **Cross-Platform**: iOS, Android, Web support- **Cross-Platform**: iOS, Android, Web support
-
-
-
-## 📦 Installation## � What's New
-
-
-
-Add this to your package's `pubspec.yaml` file:✅ **Full Quran Integration** - All 114 Surahs cached locally  
-
-✅ **Arabic Quranic Fonts** - Uthmanic Hafs for authentic display  
-
-```yaml✅ **Default Microphone** - No mic selection UI needed  
-
-dependencies:✅ **Arabic UI** - Complete Arabic language interface  
-
-  flutter_quran_tajwid:✅ **Enhanced UI** - Clean, modern Material Design 3  
-
-    git:
-
-      url: https://github.com/ha-ar/flutter_quran_tajwid.git## �🚀 Getting Started
-
+```yaml
+dependencies:
+  flutter_quran_tajwid: ^1.0.0
 ```
 
-### Prerequisites
+Then run:
+```bash
+flutter pub get
+```
 
 ## 🚀 Usage
 
-- Flutter SDK (3.0+)
+Import the package:
 
-Import the package:- Dart SDK
-
-- Google Gemini API Key
-
-```dart- XCode (for iOS)
-
-import 'package:flutter_quran_tajwid/flutter_quran_tajwid.dart';- Android Studio (for Android)
-
+```dart
+import 'package:flutter_quran_tajwid/flutter_quran_tajwid.dart';
 ```
 
-### Installation
+Initialize in your `main()`:
 
-Initialize the Quran service in your `main()`:
-
-1. **Clone and install dependencies**:
-
-```dart```bash
-
-void main() async {cd flutter_quran_tajwid
-
-  WidgetsFlutterBinding.ensureInitialized();flutter pub get
-
-  await QuranJsonService().initialize();```
-
+```dart
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await QuranJsonService().initialize();
   
-
-  runApp(const ProviderScope(child: MyApp()));2. **Set up fonts** (see [FONTS_SETUP.md](FONTS_SETUP.md)):
-
-}```bash
-
-```# Create fonts directory
-
-mkdir -p assets/fonts
-
-Use the `RecitationScreen` widget:
-
-# Download and place fonts:
-
-```dart# - UthmanicHafs.ttf (Quranic font)
-
-class MyApp extends StatelessWidget {# - NotoNaskhArabic-Regular.ttf (UI font)
-
-  const MyApp({super.key});# - NotoNaskhArabic-Bold.ttf (UI font)
-
+  runApp(const ProviderScope(child: MyApp()));
+}
 ```
+
+Use the `RecitationScreen` widget with a page number (1-604):
+
+```dart
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
-
-  Widget build(BuildContext context) {3. **Configure API Key**:
-
-    return MaterialApp(Create a `.env` file in the root directory:
-
-      home: const RecitationScreen(),```
-
-    );GEMINI_API_KEY=your_api_key_here
-
-  }```
-
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: const RecitationScreen(pageNumber: 1), // Specify page number
+    );
+  }
 }
-
-```Get your Gemini API Key from [Google AI Studio](https://aistudio.google.com)
-
-
-
-## 📱 Running the Example### Building & Running
-
-
-
-The `example` folder contains a complete sample application.```bash
-
-# Run on connected device/emulator
-
-1. Go to the example directory:flutter run
-
-   ```bash
-
-   cd example# Run on specific device
-
-   ```flutter run -d <device_id>
-
-
-
-2. Create a `.env` file in `example/` with your Gemini API key:# Build release
-
-   ```flutter build apk    # Android
-
-   GEMINI_API_KEY=your_api_key_hereflutter build ios    # iOS
-
-   ```flutter build web    # Web
-
 ```
 
-3. Run the app:
+## ⚠️ Important Notes
 
-   ```bash## 📱 Platform Setup
+### Audio Files
+**Audio reference files are NOT included in this package** due to size constraints. The package focuses on recitation analysis via live transcription. If you need audio playback features:
 
-   flutter run
+1. Host audio files on your own CDN/cloud storage
+2. Download them separately in your app
+3. Use the `audio_reference_service.dart` as a template for integration
 
-   ```### Android
+The example app in the repository includes sample audio files for development/testing purposes, but these won't be available in the published package.
 
-- Minimum SDK: 21
+### API Key Required
+You need a Google Gemini API key for transcription to work:
 
-## 🏗️ Project Structure- Permissions configured in `AndroidManifest.xml`
+1. Get your key from [Google AI Studio](https://aistudio.google.com)
+2. Configure it in your app (see example for `.env` setup)
 
-- Requires microphone permission (requested on first use)
+## 📱 Example App
 
-- `lib/`: Core library code (Services, Models, Widgets).
+The `example` folder contains a complete demonstration. To run it:
 
-- `example/`: Complete example application demonstrating usage.### iOS
+```bash
+cd example
+flutter pub get
 
-- Minimum Deployment Target: 12.0
+# Create .env file with your API key
+echo "GEMINI_API_KEY=your_api_key_here" > .env
 
-## 📄 License- Permissions configured in `Info.plist`
-
-- Microphone and network permissions required
-
-MIT License
+flutter run
+```
 
 ## 🏗️ Project Structure
 

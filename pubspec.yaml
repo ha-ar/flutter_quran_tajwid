@@ -49,12 +49,7 @@ flutter:
   uses-material-design: true
   assets:
     - lib/utils/quran_text.json
-    - assets/audio/
     - assets/fonts/
-    - assets/audio/surah_001/
-    - assets/audio/surah_002/
-    - assets/audio/surah_003/
-    - assets/audio/surah_004/
   fonts:
     # Quranic fonts
     - family: Quranic
