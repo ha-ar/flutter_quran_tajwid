@@ -1,3 +1,10 @@
+## 1.0.2
+
+* **NEW FEATURE**: Smart Tajweed Feedback
+  * Implemented `TajweedFeedbackService` to analyze specific pronunciation errors.
+  * Provides detailed feedback for common mistakes (e.g., "Qaf vs Kaf", "Sad vs Sin", missing Madd).
+  * Replaces generic "approximate match" messages with actionable correction advice.
+
 ## 1.0.1
 
 * **CRITICAL FIXES**:
