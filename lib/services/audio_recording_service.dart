@@ -38,7 +38,6 @@ class AudioRecordingService {
           encoder: AudioEncoder.pcm16bits,
           sampleRate: 16000,
           numChannels: 1,
-          bitRate: 128000,
         ),
       );
 

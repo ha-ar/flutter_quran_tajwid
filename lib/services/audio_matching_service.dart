@@ -25,10 +25,10 @@ class AudioMatchingService {
   void addAudioChunk(List<int> chunk) {
     _audioBuffer.addAll(chunk);
 
-    // Prevent infinite buffer growth by removing old data if buffer gets too large
+    // Rolling buffer: if we exceed max size, drop oldest data to keep newest
     if (_audioBuffer.length > maxBufferSize) {
-      final excessBytes = _audioBuffer.length - maxBufferSize;
-      _audioBuffer.removeRange(0, excessBytes);
+      final excess = _audioBuffer.length - maxBufferSize;
+      _audioBuffer.removeRange(0, excess);
     }
 
     debugPrint('Audio buffer size: ${_audioBuffer.length} bytes');

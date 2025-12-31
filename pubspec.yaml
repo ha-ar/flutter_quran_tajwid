@@ -4,7 +4,7 @@ repository: https://github.com/ha-ar/flutter_quran_tajwid
 homepage: https://github.com/ha-ar/flutter_quran_tajwid
 issue_tracker: https://github.com/ha-ar/flutter_quran_tajwid/issues
 
-version: 1.0.0
+version: 1.0.1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -50,12 +50,19 @@ flutter:
   assets:
     - lib/utils/quran_text.json
     - assets/fonts/
+    - assets/fonts/UthmanTN_v2-0.ttf
   fonts:
-    # Quranic fonts
-    - family: Quranic
-      fonts:
-        - asset: assets/fonts/UthmanTN_v2-0.ttf
     - family: ArabicUI
       fonts:
         - asset: assets/fonts/NotoNaskhArabic-Regular.ttf
+          weight: 400
         - asset: assets/fonts/NotoNaskhArabic-Bold.ttf
+          weight: 700
+    - family: Uthmani
+      fonts:
+        - asset: assets/fonts/UthmanTN_v2-0.ttf
+          weight: 400
+        - asset: assets/fonts/UthmanTN_v2-0.ttf
+          weight: 600
+        - asset: assets/fonts/UthmanTN_v2-0.ttf
+          weight: 700

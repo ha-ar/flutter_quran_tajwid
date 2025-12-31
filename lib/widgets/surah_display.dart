@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/highlighted_word.dart';
+import '../utils/font_loader.dart';
 
 class SurahDisplay extends StatelessWidget {
   final String surahName;
@@ -28,9 +29,8 @@ class SurahDisplay extends StatelessWidget {
             color: Color(0xFF064E3B),
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            fontFamily: 'ArabicUI',
           ),
-          textDirection: TextDirection.rtl,
+          textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
 
@@ -108,17 +108,41 @@ class SurahDisplay extends StatelessWidget {
 
   /// Build a single line of words
   Widget _buildLine(BuildContext context, List<HighlightedWord> wordsInLine) {
+    final widgets = <Widget>[];
+    for (var i = 0; i < wordsInLine.length; i++) {
+      final word = wordsInLine[i];
+      widgets.add(_buildWordWidget(context, word));
+    }
     return Wrap(
       spacing: 6,
       runSpacing: 8,
       alignment: WrapAlignment.center,
-      children:
-          wordsInLine.map((word) => _buildWordWidget(context, word)).toList(),
+      children: widgets,
     );
   }
 
   /// Build individual word widget with proper styling
   Widget _buildWordWidget(BuildContext context, HighlightedWord word) {
+    // Handle verse markers specially - display as styled verse numbers
+    if (word.isVerseMarker) {
+      // simpleText contains the Arabic-Indic numeral (e.g., "٣")
+      // text contains Quranic symbols that may not render properly
+      final verseNumDisplay = '﴿${word.simpleText}﴾';
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Text(
+          verseNumDisplay,
+          style: const TextStyle(
+            fontFamily: QuranFontLoader.uthmaniFamily,
+            fontSize: 18,
+            color: Color(0xFF374151), // Same color as other text
+            fontWeight: FontWeight.bold,
+          ),
+          textDirection: TextDirection.rtl,
+        ),
+      );
+    }
+
     Color backgroundColor;
     Color textColor;
     Color borderColor;
@@ -180,7 +204,7 @@ class SurahDisplay extends StatelessWidget {
                 color: textColor,
                 fontWeight: FontWeight.w600,
                 fontSize: 18,
-                fontFamily: 'Quranic',
+                fontFamily: QuranFontLoader.uthmaniFamily,
               ),
               textDirection: TextDirection.rtl,
             ),
@@ -195,7 +219,6 @@ class SurahDisplay extends StatelessWidget {
       SnackBar(
         content: Text(
           error,
-          style: const TextStyle(fontFamily: 'ArabicUI'),
         ),
         duration: const Duration(seconds: 4),
         backgroundColor: const Color(0xFF991B1B),

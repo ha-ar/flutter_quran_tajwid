@@ -44,11 +44,10 @@ class _AudioVisualizerState extends State<AudioVisualizer>
     return Column(
       children: [
         const Text(
-          'مستوى الصوت',
+          'Audio Level',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            fontFamily: 'ArabicUI',
             color: Color(0xFF374151),
           ),
         ),

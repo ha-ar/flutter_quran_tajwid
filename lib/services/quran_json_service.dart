@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import '../utils/surah_names.dart';
 
 class QuranWord {
   final String id;
@@ -80,9 +81,10 @@ class QuranChapter {
             ?.map((v) => QuranVerse.fromJson(v as Map<String, dynamic>))
             .toList() ??
         [];
+    final surahNum = json['surah_number'] ?? 0;
     return QuranChapter(
-      surahName: json['surah_name'] ?? '',
-      surahNumber: json['surah_number'] ?? 0,
+      surahName: getSurahEnglishName(surahNum),
+      surahNumber: surahNum,
       verses: verses,
     );
   }
@@ -227,7 +229,7 @@ class QuranJsonService {
         if (!seenSurahs.contains(chapter.surahNumber)) {
           surahs.add({
             'number': chapter.surahNumber,
-            'name': chapter.surahName,
+            'name': getSurahEnglishName(chapter.surahNumber),
             'pageNumber': page.pageNumber,
           });
           seenSurahs.add(chapter.surahNumber);

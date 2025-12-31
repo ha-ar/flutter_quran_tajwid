@@ -4,20 +4,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_quran_tajwid/flutter_quran_tajwid.dart';
 
 void main() async {
-  // Ensure widgets are initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
-  // Note: In a real app, you should handle the .env file properly.
-  // For this example, we assume .env is available in assets.
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
     debugPrint("Warning: .env file not found. Some features might not work.");
   }
 
-  // Initialize JSON-based Quran data
+  // Initialize the Quran JSON data before running the app
   await QuranJsonService().initialize();
+
+  // Load custom fonts programmatically
+  await QuranFontLoader.loadFonts();
 
   runApp(const ProviderScope(child: MyApp()));
 }
@@ -29,71 +28,110 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Quran Recitation Assistant',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF064E3B),
-          brightness: Brightness.light,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF064E3B),
-          elevation: 0,
-          centerTitle: true,
-          titleTextStyle: TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
-            fontFamily: 'ArabicUI',
-          ),
-        ),
-        textTheme: const TextTheme(
-          headlineSmall: TextStyle(
-            color: Color(0xFF064E3B),
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            fontFamily: 'ArabicUI',
-          ),
-          titleMedium: TextStyle(
-            color: Color(0xFF064E3B),
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            fontFamily: 'ArabicUI',
-          ),
-          bodyMedium: TextStyle(
-            color: Color(0xFF374151),
-            fontSize: 14,
-            fontFamily: 'ArabicUI',
-          ),
-          bodySmall: TextStyle(
-            color: Color(0xFF6B7280),
-            fontSize: 12,
-            fontFamily: 'ArabicUI',
-          ),
-        ),
-        dropdownMenuTheme: DropdownMenuThemeData(
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 8,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFF064E3B), width: 2),
-            ),
-          ),
+      theme: ThemeData(useMaterial3: true),
+      home: const HomePage(),
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final TextEditingController _pageController = TextEditingController(
+    text: '1',
+  );
+  int _totalPages = 604;
+
+  @override
+  void initState() {
+    super.initState();
+    // Try to get total pages from service; fallback to 604
+    final service = QuranJsonService();
+    try {
+      _totalPages = service.getTotalPages();
+    } catch (_) {
+      _totalPages = 604;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _openRecitation() {
+    final page = int.tryParse(_pageController.text) ?? 1;
+    final target = page.clamp(1, _totalPages);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RecitationScreen(
+          initialPageNumber: target,
+          onRecitationComplete: (result) {
+            debugPrint('Recitation Result JSON:');
+            debugPrint(result.toJsonString());
+          },
         ),
       ),
-      home: const RecitationScreen(pageNumber: 610),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Quran Recitation Example')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Start Page',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _pageController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                hintText: 'Enter page number (1-$_totalPages)',
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.arrow_forward),
+                  onPressed: _openRecitation,
+                ),
+              ),
+              onSubmitted: (_) => _openRecitation(),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _openRecitation,
+              child: const Text('Open Recitation'),
+            ),
+            const SizedBox(height: 24),
+            const Text('Or preview quick start:'),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const RecitationScreen(initialPageNumber: 1),
+                  ),
+                );
+              },
+              child: const Text('Open Page 1 (Al-Fatiha)'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

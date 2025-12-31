@@ -4,19 +4,41 @@ import 'package:flutter/foundation.dart';
 import '../models/highlighted_word.dart';
 import '../models/recitation_summary.dart';
 import '../models/surah.dart';
+import '../models/llm_config.dart';
 import '../services/gemini_live_service.dart';
 import '../services/audio_recording_service.dart';
 import '../services/audio_matching_service.dart';
 import '../services/quran_json_service.dart';
 import '../utils/arabic_utils.dart';
 
+/// LLM configuration provider.
+///
+/// By default this is initialized from environment variables
+/// (e.g. `GEMINI_API_KEY`) and uses Gemini, but it can be
+/// updated at runtime from an admin/config API.
+final llmConfigProvider = StateProvider<LlmConfig>((ref) {
+  final apiKey = dotenv.env['GEMINI_API_KEY'];
+  return LlmConfig.geminiDefault(apiKey: apiKey);
+});
+
 // Gemini Live Service Provider
 final geminiLiveServiceProvider = StateProvider<GeminiLiveService?>((ref) {
-  final apiKey = dotenv.env['GEMINI_API_KEY'];
-  if (apiKey == null) {
+  final config = ref.watch(llmConfigProvider);
+
+  if (config.provider != LlmProvider.gemini) {
+    // Other providers could be wired here in the future.
     return null;
   }
-  return GeminiLiveService(apiKey: apiKey);
+
+  final apiKey = config.apiKey;
+  if (apiKey == null || apiKey.isEmpty) {
+    return null;
+  }
+
+  return GeminiLiveService(
+    apiKey: apiKey,
+    model: config.model,
+  );
 });
 
 // Audio Recording Service Provider

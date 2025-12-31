@@ -13,5 +13,5 @@ class Surah {
     required this.text,
   });
 
-  String get displayName => '$englishName ($name)';
+  String get displayName => englishName;
 }

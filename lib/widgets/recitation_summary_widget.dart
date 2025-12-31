@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/recitation_summary.dart';
+import '../utils/font_loader.dart';
 
 class RecitationSummaryWidget extends StatelessWidget {
   final RecitationSummary summary;
@@ -30,7 +31,6 @@ class RecitationSummaryWidget extends StatelessWidget {
               color: Color(0xFF064E3B),
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              fontFamily: 'ArabicUI',
             ),
           ),
           const SizedBox(height: 20),
@@ -50,7 +50,6 @@ class RecitationSummaryWidget extends StatelessWidget {
               style: TextStyle(
                 color: Color(0xFF064E3B),
                 fontWeight: FontWeight.w600,
-                fontFamily: 'ArabicUI',
                 fontSize: 14,
               ),
             ),
@@ -78,7 +77,7 @@ class RecitationSummaryWidget extends StatelessWidget {
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
-                            fontFamily: 'Quranic',
+                            fontFamily: QuranFontLoader.uthmaniFamily,
                           ),
                           textDirection: TextDirection.rtl,
                         ),
@@ -88,9 +87,8 @@ class RecitationSummaryWidget extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 12,
                             color: Color(0xFF6B7280),
-                            fontFamily: 'ArabicUI',
                           ),
-                          textDirection: TextDirection.rtl,
+                          textDirection: TextDirection.ltr,
                         ),
                       ],
                     ),
@@ -115,7 +113,6 @@ class RecitationSummaryWidget extends StatelessWidget {
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              fontFamily: 'ArabicUI',
               color: Color(0xFF374151),
             ),
           ),
@@ -131,7 +128,6 @@ class RecitationSummaryWidget extends StatelessWidget {
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: color ?? Colors.grey[700],
-                fontFamily: 'ArabicUI',
               ),
             ),
           ),

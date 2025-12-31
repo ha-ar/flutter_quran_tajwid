@@ -5,25 +5,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/highlighted_word.dart';
+import '../models/recitation_result.dart';
 import '../providers/app_state.dart';
 import '../services/audio_recording_service.dart';
 import '../services/feedback_speech_service.dart';
 import '../services/gemini_live_service.dart';
 import '../services/quran_json_service.dart';
+import '../services/tajweed_feedback_service.dart';
 import '../utils/arabic_utils.dart';
+import '../utils/font_loader.dart';
+import '../widgets/page_navigation.dart';
+
+/// Callback type for when recitation is completed
+/// Returns the RecitationResult which can be converted to JSON
+typedef OnRecitationComplete = void Function(RecitationResult result);
 
 class RecitationScreen extends ConsumerStatefulWidget {
-  final int pageNumber;
-  const RecitationScreen({super.key, required this.pageNumber});
+  final int initialPageNumber;
+  
+  /// Optional callback that fires when recitation is completed
+  /// Use result.toJson() or result.toJsonString() to get JSON output
+  final OnRecitationComplete? onRecitationComplete;
+  
+  const RecitationScreen({
+    super.key, 
+    this.initialPageNumber = 1,
+    this.onRecitationComplete,
+  });
 
   @override
   ConsumerState<RecitationScreen> createState() => _RecitationScreenState();
 }
 
 class _RecitationScreenState extends ConsumerState<RecitationScreen> {
-  static const int _segmentDurationMs =
-      500; // Reduced from 2000ms for faster processing
-
   late final AudioRecordingService _audioRecordingService;
   final FeedbackSpeechService _feedbackSpeechService = FeedbackSpeechService();
   GeminiLiveService? _geminiService;
@@ -31,23 +45,22 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
   StreamSubscription<String>? _geminiErrorSubscription;
 
   bool _isLoadingSurah = true;
-  // Audio matching temporarily disabled; retained for future reactivation.
-  // bool _isMatchingAudio = false;
-  // DateTime _lastMatchAttempt = DateTime.fromMillisecondsSinceEpoch(0);
   int? _activeVerse;
   int _nextVerseToDetect = 1;
   int _maxVerseNumber = 7;
+  late int _currentPageNumber;
+  late int _totalPages;
   // Surah tracking for multi-surah pages
   late Map<int, int> _surahMaxVerses; // surahNumber -> max verse
   late Map<int, String> _surahNames; // surahNumber -> name
   late List<int> _surahOrder; // appearance order on this page
   int _currentSurahIndex = 0;
   int _currentSurahNumber = 0;
-  // bool _awaitingTranscription = false; // Reserved for streaming state tracking.
 
   @override
   void initState() {
     super.initState();
+    _currentPageNumber = widget.initialPageNumber;
     _audioRecordingService = AudioRecordingService();
     _feedbackSpeechService.init();
     _bootstrap();
@@ -63,7 +76,9 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     // Ensure initialized
     await quranService.initialize();
 
-    final page = quranService.getPage(widget.pageNumber);
+    _totalPages = quranService.getTotalPages();
+
+    final page = quranService.getPage(_currentPageNumber);
     if (page == null) {
       ref.read(statusMessageProvider.notifier).state = 'Page not found';
       setState(() {
@@ -117,6 +132,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
           lineNumber: word.lineNumber,
           wordIndex: i,
           isVerseMarker: isMarker,
+          isLastWordInVerse: word.lastword,
         ),
       );
     }
@@ -127,7 +143,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     ref.read(currentSurahNameProvider.notifier).state =
         _surahNames[_currentSurahNumber] ?? surahName;
     ref.read(statusMessageProvider.notifier).state =
-        'Ready to recite Page ${widget.pageNumber}';
+        'Ready to recite Page $_currentPageNumber';
 
     if (mounted) {
       setState(() {
@@ -172,52 +188,76 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Page ${widget.pageNumber}'),
+        title: Text('Page $_currentPageNumber'),
         centerTitle: true,
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                surahName.isEmpty ? 'Quran Recitation' : surahName,
-                style: Theme.of(context).textTheme.headlineSmall,
-                textAlign: TextAlign.center,
+        child: Column(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      surahName.isEmpty ? 'Quran Recitation' : surahName,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildStatusBanner(statusMessage),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: lineGroups.isEmpty
+                          ? const Center(child: CircularProgressIndicator())
+                          : Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color:
+                                    const Color(0xFFFFFBF0), // Cream background
+                                borderRadius: BorderRadius.circular(12),
+                                border:
+                                    Border.all(color: const Color(0xFFE5E7EB)),
+                              ),
+                              child: ListView(
+                                children: lineGroups.entries
+                                    .map(
+                                      (entry) => _buildLineRow(
+                                        entry.key,
+                                        entry.value,
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildControls(isReciting),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              _buildStatusBanner(statusMessage),
-              const SizedBox(height: 16),
-              Expanded(
-                child: lineGroups.isEmpty
-                    ? const Center(child: CircularProgressIndicator())
-                    : Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFFBF0), // Cream background
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
-                        ),
-                        child: ListView(
-                          children: lineGroups.entries
-                              .map(
-                                (entry) => _buildLineRow(
-                                  entry.key,
-                                  entry.value,
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ),
-              ),
-              const SizedBox(height: 16),
-              _buildControls(isReciting),
-            ],
-          ),
+            ),
+            PageNavigation(
+              currentPage: _currentPageNumber,
+              totalPages: _totalPages,
+              onPageChanged: _changePage,
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  void _changePage(int newPageNumber) {
+    if (newPageNumber != _currentPageNumber) {
+      _resetAll();
+      setState(() {
+        _currentPageNumber = newPageNumber;
+        _isLoadingSurah = true;
+      });
+      _loadPage();
+    }
   }
 
   Widget _buildStatusBanner(String message) {
@@ -308,6 +348,26 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
   }
 
   Widget _buildWordChip(HighlightedWord word) {
+    // Handle verse markers specially - display as styled verse numbers
+    if (word.isVerseMarker) {
+      // simpleText contains the Arabic-Indic numeral (e.g., "٣")
+      // text contains Quranic symbols that may not render without special fonts
+      final verseNumDisplay = '﴿${word.simpleText}﴾';
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Text(
+          verseNumDisplay,
+          style: const TextStyle(
+            fontFamily: QuranFontLoader.uthmaniFamily,
+            fontSize: 18,
+            color: Color(0xFF1F2937), // Same color as other text
+            fontWeight: FontWeight.bold,
+          ),
+          textDirection: TextDirection.rtl,
+        ),
+      );
+    }
+
     Color backgroundColor;
     Color borderColor;
     Color textColor;
@@ -346,7 +406,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
       child: Text(
         word.text,
         style: TextStyle(
-          fontFamily: 'Quranic',
+          fontFamily: QuranFontLoader.uthmaniFamily,
           fontSize: 18,
           color: textColor,
         ),
@@ -482,49 +542,23 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
   }
 
   void _handleAudioChunk(List<int> chunk) {
-    // SKIP AUDIO PROCESSING FOR NOW - only send to Gemini for transcription
+    // Send audio directly to Gemini for real-time transcription.
+    // Streaming as it arrives is more efficient for the Live API than buffering.
+    if (_geminiService?.isConnected ?? false) {
+      _geminiService!.sendAudioChunk(Uint8List.fromList(chunk));
+    }
 
+    // Still maintain the buffer in case we want to re-enable local matching later
     final audioMatching = ref.read(audioMatchingServiceProvider);
     audioMatching.addAudioChunk(chunk);
-
-    // Extract segment just to prevent buffer growth
-    final segment = audioMatching.extractSegment(_segmentDurationMs);
-    if (segment == null) {
-      return; // Not enough data yet
+    
+    // Periodically clear old data from the buffer since we aren't using segments right now
+    if (audioMatching.getBuffer().length > 160000) {
+       audioMatching.clearBuffer();
     }
-
-    // Process segment asynchronously
-    Future(() async {
-      try {
-        // Send to Gemini for transcription only (skip audio matching)
-        if (_geminiService?.isConnected ?? false) {
-          await _sendSegmentToGemini(segment);
-        }
-
-        // SKIP AUDIO MATCHING - commented out for now
-        // if (!shouldThrottleMatching && !_awaitingTranscription) {
-        //   _lastMatchAttempt = now;
-        //   _isMatchingAudio = true;
-        //   await _matchAudioSegment(segment);
-        //   _isMatchingAudio = false;
-        // }
-      } finally {
-        // Always remove processed bytes to prevent buffer growth
-        audioMatching.removeProcessedBytes(segment.length);
-      }
-    });
   }
 
-  // _matchAudioSegment retained for historical context; removed to clear lint.
 
-  Future<void> _sendSegmentToGemini(Uint8List segment) async {
-    final service = _geminiService;
-    if (service == null || !service.isConnected) {
-      return;
-    }
-
-    await service.sendAudioChunk(segment);
-  }
 
   void _handleTranscription(GeminiTranscriptionMessage message) {
     // Debug: log all transcriptions to see if they're arriving
@@ -738,10 +772,15 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
             // Near miss: show yellow and allow improvement (not counted as error in verse completion)
             final tokenIdx = tokens.indexOf(token);
             if (tokenIdx >= 0) tokens.removeAt(tokenIdx);
+            // Provide smart feedback
+            final specificFeedback =
+                TajweedFeedbackService.analyzeMistake(expected, token);
+            final feedbackMsg = specificFeedback ??
+                'Approximate pronunciation (${(similarity * 100).toInt()}% match)';
+
             allWords[index] = allWords[index].copyWith(
               status: WordStatus.recitedNearMiss,
-              tajweedError:
-                  'Approximate pronunciation (similarity ${similarity.toStringAsFixed(2)}) - target ≥ ${kMinRecitationSimilarity.toStringAsFixed(2)}',
+              tajweedError: feedbackMsg,
             );
             debugPrint(
                 '⚠ Near fuzzy (near-miss, sim=${similarity.toStringAsFixed(2)}): "${allWords[index].text}" vs "$token"');
@@ -803,6 +842,9 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
             : 'Surah ${_surahNames[_currentSurahNumber]} verse $verseNumber completed - ready for verse $_nextVerseToDetect';
         debugPrint(
             '✓ Surah $_currentSurahNumber verse $verseNumber complete. Next verse: $_nextVerseToDetect');
+        
+        // Clear audio buffer after successful verse completion to prevent "stuck" state
+        ref.read(audioMatchingServiceProvider).clearBuffer();
       } else {
         // Surah finished - advance to next surah on page if any
         if (_currentSurahIndex < _surahOrder.length - 1) {
@@ -814,6 +856,10 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
               ? 'Surah ${_surahNames[_surahOrder[_currentSurahIndex - 1]]} finished with $finalErrorCount errors - start Surah ${_surahNames[_currentSurahNumber]} verse 1'
               : 'Surah ${_surahNames[_surahOrder[_currentSurahIndex - 1]]} finished - start Surah ${_surahNames[_currentSurahNumber]} verse 1';
           debugPrint('✓ Surah transition: now surah $_currentSurahNumber');
+          
+          // Clear audio buffer after surah transition
+          ref.read(audioMatchingServiceProvider).clearBuffer();
+
           // Update providers for new surah name/number
           ref.read(currentSurahNumberProvider.notifier).state =
               _currentSurahNumber;
@@ -822,9 +868,9 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
         } else {
           // Last surah on page completed
           message = finalErrorCount > 0
-              ? 'Page ${widget.pageNumber} complete with $finalErrorCount missed words'
-              : 'Page ${widget.pageNumber} completed successfully';
-          debugPrint('✓ Page ${widget.pageNumber} complete!');
+              ? 'Page $_currentPageNumber complete with $finalErrorCount missed words'
+              : 'Page $_currentPageNumber completed successfully';
+          debugPrint('✓ Page $_currentPageNumber complete!');
           Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted) {
               _showSummaryReport();
@@ -842,78 +888,48 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
 
   void _showSummaryReport() {
     final allWords = ref.read(highlightedWordsProvider);
+    final surahName = _surahNames[_currentSurahNumber] ?? '';
 
-    // Calculate statistics
-    int totalWords = 0;
-    int correctWords = 0;
-    int errorWords = 0;
-    int unrecitedWords = 0;
-    int nearMissWords = 0;
-    final verseStats = <int, Map<String, dynamic>>{};
-    final errorWordsList = <Map<String, String>>[];
-    final nearMissWordsList = <Map<String, String>>[];
+    // Create RecitationResult for JSON export
+    final result = RecitationResult.fromHighlightedWords(
+      words: allWords,
+      pageNumber: _currentPageNumber,
+      surahNumber: _currentSurahNumber,
+      surahName: surahName,
+    );
 
-    for (final word in allWords) {
-      if (word.isVerseMarker) continue;
+    // Invoke callback if provided
+    widget.onRecitationComplete?.call(result);
 
-      totalWords++;
+    // Calculate statistics for UI display
+    final totalWords = result.totalWords;
+    final correctWords = result.correctWords;
+    final errorWords = result.errorWords;
+    final unrecitedWords = result.unrecitedWords;
+    final nearMissWords = result.nearMissWords;
+    final accuracy = result.accuracy.toStringAsFixed(1);
 
-      // Initialize verse stats
-      verseStats.putIfAbsent(
-          word.verseNumber,
-          () => {
-                'total': 0,
-                'correct': 0,
-                'nearMiss': 0,
-                'errors': 0,
-                'unrecited': 0,
-              });
+    // Build error and near-miss lists for display
+    final errorWordsList = result.errorWordsList
+        .map((w) => {
+              'verse': w.verseNumber.toString(),
+              'word': w.text,
+              'error': w.error ?? 'Unknown error',
+            })
+        .toList();
 
-      verseStats[word.verseNumber]!['total'] =
-          (verseStats[word.verseNumber]!['total'] as int) + 1;
-
-      switch (word.status) {
-        case WordStatus.recitedCorrect:
-          correctWords++;
-          verseStats[word.verseNumber]!['correct'] =
-              (verseStats[word.verseNumber]!['correct'] as int) + 1;
-          break;
-        case WordStatus.recitedNearMiss:
-          nearMissWords++;
-          verseStats[word.verseNumber]!['nearMiss'] =
-              (verseStats[word.verseNumber]!['nearMiss'] as int) + 1;
-          nearMissWordsList.add({
-            'verse': word.verseNumber.toString(),
-            'word': word.text,
-            'hint': word.tajweedError ?? 'تحسين مطلوب',
-          });
-          break;
-        case WordStatus.recitedTajweedError:
-          errorWords++;
-          verseStats[word.verseNumber]!['errors'] =
-              (verseStats[word.verseNumber]!['errors'] as int) + 1;
-          errorWordsList.add({
-            'verse': word.verseNumber.toString(),
-            'word': word.text,
-            'error': word.tajweedError ?? 'Unknown error',
-          });
-          break;
-        case WordStatus.unrecited:
-          unrecitedWords++;
-          verseStats[word.verseNumber]!['unrecited'] =
-              (verseStats[word.verseNumber]!['unrecited'] as int) + 1;
-          break;
-      }
-    }
-
-    final accuracy = totalWords > 0
-        ? (correctWords / totalWords * 100).toStringAsFixed(1)
-        : '0.0';
+    final nearMissWordsList = result.nearMissWordsList
+        .map((w) => {
+              'verse': w.verseNumber.toString(),
+              'word': w.text,
+              'hint': w.error ?? 'Improvement needed',
+            })
+        .toList();
 
     showDialog(
       context: context,
       builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: TextDirection.ltr,
         child: AlertDialog(
           title: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -921,9 +937,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
               Icon(Icons.assessment, color: Color(0xFF0284C7), size: 28),
               SizedBox(width: 8),
               Text(
-                'تقرير التلاوة',
+                'Recitation Report',
                 style: TextStyle(
-                  fontFamily: 'ArabicUI',
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                 ),
@@ -946,34 +961,32 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                   child: Column(
                     children: [
                       const Text(
-                        'الإحصائيات العامة',
+                        'Overall Statistics',
                         style: TextStyle(
-                          fontFamily: 'ArabicUI',
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 12),
                       _buildStatRow(
-                          'إجمالي الكلمات', totalWords.toString(), Colors.blue),
-                      _buildStatRow('الكلمات الصحيحة', correctWords.toString(),
+                          'Total Words', totalWords.toString(), Colors.blue),
+                      _buildStatRow('Correct Words', correctWords.toString(),
                           Colors.green),
                       if (nearMissWords > 0)
-                        _buildStatRow('الكلمات القريبة',
+                        _buildStatRow('Near Miss Words',
                             nearMissWords.toString(), Colors.amber),
                       _buildStatRow(
-                          'الكلمات الخاطئة', errorWords.toString(), Colors.red),
+                          'Error Words', errorWords.toString(), Colors.red),
                       if (unrecitedWords > 0)
-                        _buildStatRow('الكلمات غير المقروءة',
-                            unrecitedWords.toString(), Colors.red),
+                        _buildStatRow('Unrecited Words',
+                            unrecitedWords.toString(), Colors.grey),
                       const Divider(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const Text(
-                            'الدقة: ',
+                            'Accuracy: ',
                             style: TextStyle(
-                              fontFamily: 'ArabicUI',
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                             ),
@@ -981,7 +994,6 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                           Text(
                             '$accuracy%',
                             style: TextStyle(
-                              fontFamily: 'ArabicUI',
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
                               color: double.parse(accuracy) >= 80
@@ -1000,9 +1012,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                 if (nearMissWordsList.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   const Text(
-                    'الكلمات القريبة من الصحيح (تحسين بسيط)',
+                    'Near Miss Words (Minor Improvement Needed)',
                     style: TextStyle(
-                      fontFamily: 'ArabicUI',
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1032,9 +1043,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    'آية ${item['verse']}',
+                                    'Verse ${item['verse']}',
                                     style: const TextStyle(
-                                      fontFamily: 'ArabicUI',
                                       fontSize: 12,
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
@@ -1043,12 +1053,15 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: Text(
-                                    item['word']!,
-                                    style: const TextStyle(
-                                      fontFamily: 'Quranic',
-                                      fontSize: 18,
-                                      color: Color(0xFF92400E),
+                                  child: Directionality(
+                                    textDirection: TextDirection.rtl,
+                                    child: Text(
+                                      item['word']!,
+                                      style: const TextStyle(
+                                        fontFamily: QuranFontLoader.uthmaniFamily,
+                                        fontSize: 18,
+                                        color: Color(0xFF92400E),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1058,7 +1071,6 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                             Text(
                               item['hint']!,
                               style: const TextStyle(
-                                fontFamily: 'ArabicUI',
                                 fontSize: 12,
                                 color: Color(0xFF92400E),
                               ),
@@ -1071,9 +1083,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                 if (errorWordsList.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   const Text(
-                    'الكلمات التي تحتاج إلى تحسين',
+                    'Words That Need Improvement',
                     style: TextStyle(
-                      fontFamily: 'ArabicUI',
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1103,9 +1114,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    'آية ${error['verse']}',
+                                    'Verse ${error['verse']}',
                                     style: const TextStyle(
-                                      fontFamily: 'ArabicUI',
                                       fontSize: 12,
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
@@ -1114,12 +1124,15 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: Text(
-                                    error['word']!,
-                                    style: const TextStyle(
-                                      fontFamily: 'Quranic',
-                                      fontSize: 18,
-                                      color: Color(0xFF991B1B),
+                                  child: Directionality(
+                                    textDirection: TextDirection.rtl,
+                                    child: Text(
+                                      error['word']!,
+                                      style: const TextStyle(
+                                        fontFamily: QuranFontLoader.uthmaniFamily,
+                                        fontSize: 18,
+                                        color: Color(0xFF991B1B),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1129,7 +1142,6 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                             Text(
                               error['error']!,
                               style: const TextStyle(
-                                fontFamily: 'ArabicUI',
                                 fontSize: 12,
                                 color: Color(0xFF991B1B),
                               ),
@@ -1145,8 +1157,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text(
-                'إغلاق',
-                style: TextStyle(fontFamily: 'ArabicUI', fontSize: 16),
+                'Close',
+                style: TextStyle(fontSize: 16),
               ),
             ),
             ElevatedButton(
@@ -1159,8 +1171,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                 foregroundColor: Colors.white,
               ),
               child: const Text(
-                'إعادة المحاولة',
-                style: TextStyle(fontFamily: 'ArabicUI', fontSize: 16),
+                'Try Again',
+                style: TextStyle(fontSize: 16),
               ),
             ),
           ],
@@ -1178,7 +1190,6 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
           Text(
             label,
             style: const TextStyle(
-              fontFamily: 'ArabicUI',
               fontSize: 14,
             ),
           ),
@@ -1191,7 +1202,6 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
             child: Text(
               value,
               style: TextStyle(
-                fontFamily: 'ArabicUI',
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: color,

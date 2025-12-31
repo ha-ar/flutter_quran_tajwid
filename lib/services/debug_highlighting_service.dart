@@ -3,22 +3,21 @@ import '../models/highlighted_word.dart';
 
 /// Service to debug the highlighting flow
 class DebugHighlightingService {
-  
   /// Log the entire highlighting flow
   static void logHighlightingFlow(String stage, Map<String, dynamic> data) {
     final timestamp = DateTime.now().toIso8601String();
-    
+
     debugPrint('═══════════════════════════════════════════════════════');
     debugPrint('🔍 HIGHLIGHTING DEBUG - $stage @ $timestamp');
     debugPrint('═══════════════════════════════════════════════════════');
-    
+
     data.forEach((key, value) {
       debugPrint('  $key: $value');
     });
-    
+
     debugPrint('───────────────────────────────────────────────────────\n');
   }
-  
+
   /// Log verse matching results
   static void logVerseMatch(
     int verseNumber,
@@ -26,12 +25,14 @@ class DebugHighlightingService {
     int surahNumber,
   ) {
     if (score >= 0.75) {
-      debugPrint('✅ VERSE MATCH - Surah $surahNumber, Verse $verseNumber, Score: ${(score * 100).toStringAsFixed(1)}%');
+      debugPrint(
+          '✅ VERSE MATCH - Surah $surahNumber, Verse $verseNumber, Score: ${(score * 100).toStringAsFixed(1)}%');
     } else {
-      debugPrint('❌ LOW SCORE - Verse $verseNumber: ${(score * 100).toStringAsFixed(1)}%');
+      debugPrint(
+          '❌ LOW SCORE - Verse $verseNumber: ${(score * 100).toStringAsFixed(1)}%');
     }
   }
-  
+
   /// Log word matching details
   static void logWordMatching(
     int verseNumber,
@@ -44,7 +45,7 @@ class DebugHighlightingService {
       debugPrint('  $status Word ${i + 1}: "${match.simpleText}"');
     }
   }
-  
+
   /// Log highlighted words state before and after update
   static void logHighlightedWordsUpdate(
     List<HighlightedWord> before,
@@ -53,28 +54,35 @@ class DebugHighlightingService {
   ) {
     debugPrint('🎨 HIGHLIGHTED WORDS UPDATE - Reason: $reason');
     debugPrint('  Before: ${before.length} words');
-    
+
     // Count statuses before
-    int recitedCorrectBefore = before.where((w) => w.status == WordStatus.recitedCorrect).length;
-    int errorBefore = before.where((w) => w.status == WordStatus.recitedTajweedError).length;
+    int recitedCorrectBefore =
+        before.where((w) => w.status == WordStatus.recitedCorrect).length;
+    int errorBefore =
+        before.where((w) => w.status == WordStatus.recitedTajweedError).length;
     debugPrint('    - Recited Correct: $recitedCorrectBefore');
     debugPrint('    - Tajweed Errors: $errorBefore');
-    debugPrint('    - Unrecited: ${before.length - recitedCorrectBefore - errorBefore}');
-    
+    debugPrint(
+        '    - Unrecited: ${before.length - recitedCorrectBefore - errorBefore}');
+
     debugPrint('  After: ${after.length} words');
-    
+
     // Count statuses after
-    int recitedCorrectAfter = after.where((w) => w.status == WordStatus.recitedCorrect).length;
-    int errorAfter = after.where((w) => w.status == WordStatus.recitedTajweedError).length;
+    int recitedCorrectAfter =
+        after.where((w) => w.status == WordStatus.recitedCorrect).length;
+    int errorAfter =
+        after.where((w) => w.status == WordStatus.recitedTajweedError).length;
     debugPrint('    - Recited Correct: $recitedCorrectAfter');
     debugPrint('    - Tajweed Errors: $errorAfter');
-    debugPrint('    - Unrecited: ${after.length - recitedCorrectAfter - errorAfter}');
-    
+    debugPrint(
+        '    - Unrecited: ${after.length - recitedCorrectAfter - errorAfter}');
+
     if (recitedCorrectAfter > recitedCorrectBefore) {
-      debugPrint('  Δ Change: +${recitedCorrectAfter - recitedCorrectBefore} correct words 🎉');
+      debugPrint(
+          '  Δ Change: +${recitedCorrectAfter - recitedCorrectBefore} correct words 🎉');
     }
   }
-  
+
   /// Log audio segment info
   static void logAudioSegment(
     int bufferSize,
@@ -86,7 +94,7 @@ class DebugHighlightingService {
     debugPrint('  Segment size: $segmentSize bytes');
     debugPrint('  Duration: ${duration}ms');
   }
-  
+
   /// Log reference verse data
   static void logReferseData(
     int surahNumber,
@@ -100,7 +108,7 @@ class DebugHighlightingService {
       debugPrint('    ${i + 1}. "${word.text}" (simple: "${word.simpleText}")');
     }
   }
-  
+
   /// Log provider state
   static void logProviderState(
     String providerName,
@@ -110,7 +118,8 @@ class DebugHighlightingService {
     if (state is List<HighlightedWord>) {
       debugPrint('  Type: List<HighlightedWord>');
       debugPrint('  Length: ${state.length}');
-      int correct = state.where((w) => w.status == WordStatus.recitedCorrect).length;
+      int correct =
+          state.where((w) => w.status == WordStatus.recitedCorrect).length;
       debugPrint('  Recited Correct: $correct');
     } else if (state is int) {
       debugPrint('  Type: int');
@@ -120,19 +129,22 @@ class DebugHighlightingService {
       debugPrint('  Value: $state');
     }
   }
-  
+
   /// Create a comprehensive status report
   static String createStatusReport(Map<String, dynamic> context) {
     final buffer = StringBuffer();
-    buffer.writeln('╔════════════════════════════════════════════════════════╗');
-    buffer.writeln('║         HIGHLIGHTING SYSTEM STATUS REPORT              ║');
-    buffer.writeln('╚════════════════════════════════════════════════════════╝');
+    buffer
+        .writeln('╔════════════════════════════════════════════════════════╗');
+    buffer
+        .writeln('║         HIGHLIGHTING SYSTEM STATUS REPORT              ║');
+    buffer
+        .writeln('╚════════════════════════════════════════════════════════╝');
     buffer.writeln('');
-    
+
     context.forEach((key, value) {
       buffer.writeln('  $key: $value');
     });
-    
+
     return buffer.toString();
   }
 }

@@ -33,7 +33,20 @@ class GeminiTranscriptionMessage {
   });
 
   factory GeminiTranscriptionMessage.fromJson(Map<String, dynamic> json) {
-    // Handle inputTranscription format
+    // Handle input_transcription format (official snake_case)
+    if (json.containsKey('input_transcription') &&
+        json['input_transcription'] is Map) {
+      final transcriptionData =
+          json['input_transcription'] as Map<String, dynamic>;
+      final text = transcriptionData['text'] as String? ?? '';
+      final isFinal = transcriptionData['is_final'] as bool? ?? false;
+      return GeminiTranscriptionMessage(
+        text: text.trim(),
+        isFinal: isFinal,
+      );
+    }
+
+    // Handle inputTranscription format (legacy/camelCase fallback)
     if (json.containsKey('inputTranscription') &&
         json['inputTranscription'] is Map) {
       final transcriptionData =
@@ -46,7 +59,24 @@ class GeminiTranscriptionMessage {
       );
     }
 
-    // Handle modelTurn responses format
+    // Handle model_turn responses format (official snake_case)
+    if (json.containsKey('model_turn') && json['model_turn'] is Map) {
+      final modelTurn = json['model_turn'] as Map<String, dynamic>;
+      if (modelTurn.containsKey('parts') && modelTurn['parts'] is List) {
+        final parts = modelTurn['parts'] as List;
+        for (var part in parts) {
+          if (part is Map && part.containsKey('text')) {
+            final text = part['text'] as String? ?? '';
+            return GeminiTranscriptionMessage(
+              text: text.trim(),
+              isFinal: true,
+            );
+          }
+        }
+      }
+    }
+
+    // Handle modelTurn responses format (legacy/camelCase fallback)
     if (json.containsKey('modelTurn') && json['modelTurn'] is Map) {
       final modelTurn = json['modelTurn'] as Map<String, dynamic>;
       if (modelTurn.containsKey('parts') && modelTurn['parts'] is List) {
@@ -70,7 +100,11 @@ class GeminiTranscriptionMessage {
 
 class GeminiLiveService {
   final String apiKey;
-  final String model = 'gemini-2.0-flash-live-001';
+
+  /// Gemini model identifier. Defaults to a recent
+  /// Gemini Flash live model but can be overridden via
+  /// configuration (for example from an admin panel).
+  final String model;
 
   WebSocketChannel? _channel;
   final StreamController<GeminiTranscriptionMessage> _transcriptionController =
@@ -87,17 +121,22 @@ class GeminiLiveService {
   Stream<String> get errorStream => _errorController.stream;
   Stream<bool> get connectionStream => _connectionController.stream;
 
-  GeminiLiveService({required this.apiKey});
+  GeminiLiveService({
+    required this.apiKey,
+    String? model,
+  }) : model = model ?? 'gemini-2.0-flash-exp';
 
-  /// Connect to Gemini Live API
-  Future<void> connect() async {
+  /// Connect to Gemini Live API. Returns true if connection was successfully initiated.
+  Future<bool> connect() async {
+    _isManuallyDisconnecting = false;
+    
     if (_isConnected) {
       debugPrint('[GeminiLiveService] Already connected.');
-      return;
+      return true;
     }
 
     try {
-      debugPrint('[GeminiLiveService] Connecting...');
+      debugPrint('[GeminiLiveService] Connecting to v1beta...');
       // Updated WebSocket URL for Gemini multimodal live API to v1beta
       final wsUrl =
           'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$apiKey';
@@ -115,23 +154,27 @@ class GeminiLiveService {
       // Listen for incoming messages
       _channel!.stream.listen(
         (message) {
-          // No need to print raw message here, _handleMessage will do it.
+          debugPrint('[GeminiLiveService] ⬇️ Received message: ${message.toString().substring(0, message.toString().length > 200 ? 200 : message.toString().length)}...');
           _handleMessage(message);
         },
-        onError: (error) {
-          debugPrint('[GeminiLiveService] WebSocket error: $error');
+        onError: (error, stackTrace) {
+          debugPrint('[GeminiLiveService] ❌ WebSocket error: $error');
+          debugPrint('[GeminiLiveService] Stack trace: $stackTrace');
           _handleDisconnect();
           _errorController.add('WebSocket error: $error');
         },
         onDone: () {
-          debugPrint('[GeminiLiveService] WebSocket connection closed.');
+          debugPrint('[GeminiLiveService] 🔌 WebSocket connection closed (onDone called)');
           _handleDisconnect();
         },
+        cancelOnError: false,
       );
+      return true;
     } catch (e) {
       debugPrint('[GeminiLiveService] Connection failed: $e');
       _handleDisconnect();
       _errorController.add('Connection failed: $e');
+      return false;
     }
   }
 
@@ -139,8 +182,33 @@ class GeminiLiveService {
     if (_isConnected) {
       _isConnected = false;
       _connectionController.add(false);
-      _errorController.add('Connection failed: Disconnected ');
+      debugPrint('[GeminiLiveService] Disconnected.');
+      
+      // Attempt to reconnect if checks pass
+      _attemptReconnect();
     }
+  }
+
+  void _attemptReconnect() {
+    if (_isManuallyDisconnecting) {
+       debugPrint('[GeminiLiveService] Manual disconnect, not reconnecting.');
+       return;
+    }
+
+    // Only reconnect if we weren't manually disconnected (channel check usually sufficient)
+    // and if we have an API key.
+    // For now, simple backoff or immediate retry.
+    debugPrint('[GeminiLiveService] 🔄 Attempting auto-reconnect...');
+    
+    Future.delayed(const Duration(milliseconds: 500), () {
+      connect().then((success) {
+        if (success) {
+           debugPrint('[GeminiLiveService] ✅ Reconnected successfully.');
+        } else {
+           debugPrint('[GeminiLiveService] ❌ Reconnect failed.');
+        }
+      });
+    });
   }
 
   /// Send setup/configuration message to Gemini
@@ -150,10 +218,10 @@ class GeminiLiveService {
       final setupMessage = {
         'setup': {
           'model': 'models/$model',
-          'generationConfig': {
-            'responseModalities': ['TEXT'],
+          'generation_config': {
+            'response_modalities': ['TEXT'],
           },
-          'systemInstruction': {
+          'system_instruction': {
             'parts': [
               {
                 'text':
@@ -187,9 +255,9 @@ class GeminiLiveService {
       final base64Audio = base64Encode(audioData);
 
       final audioMessage = {
-        'realtimeInput': {
-          'mediaChunks': [
-            {'data': base64Audio, 'mimeType': 'audio/pcm;rate=16000'}
+        'realtime_input': {
+          'media_chunks': [
+            {'data': base64Audio, 'mime_type': 'audio/pcm;rate=16000'}
           ]
         }
       };
@@ -221,40 +289,53 @@ class GeminiLiveService {
       final decoded = jsonDecode(messageString) as Map<String, dynamic>;
 
       // Check for server content with transcription or text response
-      if (decoded.containsKey('serverContent')) {
-        final serverContent = decoded['serverContent'] as Map<String, dynamic>;
+      // Check for serverContent with transcription or text response (handle both snake_case and camelCase)
+      final serverContent = decoded['server_content'] ?? decoded['serverContent'];
+      if (serverContent != null && serverContent is Map<String, dynamic>) {
         final transcription =
             GeminiTranscriptionMessage.fromJson(serverContent);
 
-        if (transcription.text.isNotEmpty && transcription.isFinal) {
+        if (transcription.text.isNotEmpty) {
           debugPrint(
               '[GeminiLiveService] Parsed Text: "${transcription.text}", IsFinal: ${transcription.isFinal}');
           _transcriptionController.add(transcription);
         } else {
-          debugPrint(
-              '[GeminiLiveService] Parsed an empty transcription message.');
+          // It's normal to receive empty messages (e.g. turnComplete), just ignore them
         }
       }
 
       // Handle errors
-      if (decoded.containsKey('error')) {
-        final errorObj = decoded['error'];
-        final error = (errorObj is Map && errorObj['message'] != null)
-            ? errorObj['message'].toString()
-            : 'Unknown error';
-        debugPrint('[GeminiLiveService] Gemini error: $error');
+      final errorObj = decoded['error'];
+      if (errorObj != null) {
+        String error;
+        if (errorObj is Map) {
+          error = errorObj['message']?.toString() ?? 'Unknown error';
+          final code = errorObj['code'];
+          final status = errorObj['status'];
+          debugPrint('[GeminiLiveService] ❌ Gemini error details:');
+          debugPrint('  - Message: $error');
+          debugPrint('  - Code: $code');
+          debugPrint('  - Status: $status');
+          debugPrint('  - Full error object: $errorObj');
+        } else {
+          error = 'Unknown error: $errorObj';
+        }
         _errorController.add('Gemini error: $error');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       final errorMessage = 'Message parsing error: $e';
       debugPrint('[GeminiLiveService] $errorMessage');
+      debugPrint('[GeminiLiveService] Stack trace: $stackTrace');
       _errorController.add(errorMessage);
     }
   }
 
+  bool _isManuallyDisconnecting = false;
+
   /// Disconnect from Gemini
   Future<void> disconnect() async {
     try {
+      _isManuallyDisconnecting = true;
       debugPrint('[GeminiLiveService] Disconnecting...');
       await _channel?.sink.close();
       _handleDisconnect();

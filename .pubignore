@@ -20,3 +20,4 @@ scripts/
 
 # Exclude test files from chrome directory
 chrome/test/
+example/.env

@@ -81,15 +81,13 @@ class QuranService {
       'name': 'المائدة',
       'englishName': 'Al-Ma-idah',
       'numberOfAyahs': 120,
-      'text':
-          'يَٰٓأَيُّهَا ٱلَّذِينَ آمَنُوٓاْ أَوۡفُواْ بِٱلۡعُقُودِ ١'
+      'text': 'يَٰٓأَيُّهَا ٱلَّذِينَ آمَنُوٓاْ أَوۡفُواْ بِٱلۡعُقُودِ ١'
     },
     6: {
       'name': 'الأنعام',
       'englishName': 'Al-An-am',
       'numberOfAyahs': 165,
-      'text':
-          'ٱلۡحَمۡدُ لِلَّهِ ٱلَّذِي خَلَقَ ٱلسَّمَٰوَٰتِ وَٱلۡأَرۡضَ ١'
+      'text': 'ٱلۡحَمۡدُ لِلَّهِ ٱلَّذِي خَلَقَ ٱلسَّمَٰوَٰتِ وَٱلۡأَرۡضَ ١'
     },
     7: {
       'name': 'الأعراف',
@@ -116,8 +114,7 @@ class QuranService {
       'name': 'يونس',
       'englishName': 'Yunus',
       'numberOfAyahs': 109,
-      'text':
-          'الر ۚ تِلۡكَ آيَٰتُ ٱلۡكِتَٰبِ ٱلۡحَكِيمِ ١'
+      'text': 'الر ۚ تِلۡكَ آيَٰتُ ٱلۡكِتَٰبِ ٱلۡحَكِيمِ ١'
     },
     11: {
       'name': 'هود',
@@ -675,7 +672,8 @@ class QuranService {
       'name': 'العصر',
       'englishName': 'Al-Asr',
       'numberOfAyahs': 3,
-      'text': 'وَٱلۡعَصۡرِ ١ إِنَّ ٱلۡإِنسَٰنَ لَفِي خُسۡrٍ ٢ إِلَّا ٱلَّذِينَ آمَنُواْ ٣'
+      'text':
+          'وَٱلۡعَصۡرِ ١ إِنَّ ٱلۡإِنسَٰنَ لَفِي خُسۡrٍ ٢ إِلَّا ٱلَّذِينَ آمَنُواْ ٣'
     },
     104: {
       'name': 'الهمزة',
@@ -729,7 +727,8 @@ class QuranService {
       'name': 'الإخلاص',
       'englishName': 'Al-Ikhlas',
       'numberOfAyahs': 4,
-      'text': 'قُلۡ هُوَ ٱللَّهُ أَحَدٌ  ٱللَّهُ ٱلصَّمَدُ  لَمۡ يَلِدۡ وَلَمۡ يُولَدۡ  وَلَمۡ يَكُن لَّهُۥ كُفُوًا أَحَدٌ '
+      'text':
+          'قُلۡ هُوَ ٱللَّهُ أَحَدٌ  ٱللَّهُ ٱلصَّمَدُ  لَمۡ يَلِدۡ وَلَمۡ يُولَدۡ  وَلَمۡ يَكُن لَّهُۥ كُفُوًا أَحَدٌ '
     },
     113: {
       'name': 'الفلق',
@@ -748,18 +747,17 @@ class QuranService {
   static Future<void> initialize() async {
     await _cache.initialize();
   }
-  
+
   /// Split a surah's text into individual ayahs
   static List<String> getAyahs(String surahText) {
     if (surahText.isEmpty) return [];
-    
+
     // The ayah number is a reliable delimiter
     final ayahs = surahText.split(RegExp(r'\s*١|٢|٣|٤|٥|٦|٧|٨|٩|٠\s*'));
-    
+
     // Remove any empty strings that result from the split
     return ayahs.where((ayah) => ayah.trim().isNotEmpty).toList();
   }
-
 
   /// Get all Surah objects in order
   static List<Surah> getAllSurahs() {

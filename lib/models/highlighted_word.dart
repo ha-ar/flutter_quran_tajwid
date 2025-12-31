@@ -17,6 +17,8 @@ class HighlightedWord {
   final int wordIndex; // Position of the word within the Surah
   final bool
       isVerseMarker; // True when this entry represents a verse marker/number
+  final bool
+      isLastWordInVerse; // True when this is the last word in a verse (for displaying verse number)
 
   HighlightedWord({
     required this.text,
@@ -28,6 +30,7 @@ class HighlightedWord {
     required this.lineNumber,
     required this.wordIndex,
     this.isVerseMarker = false,
+    this.isLastWordInVerse = false,
   });
 
   HighlightedWord copyWith({
@@ -40,6 +43,7 @@ class HighlightedWord {
     int? lineNumber,
     int? wordIndex,
     bool? isVerseMarker,
+    bool? isLastWordInVerse,
   }) {
     return HighlightedWord(
       text: text ?? this.text,
@@ -51,6 +55,7 @@ class HighlightedWord {
       lineNumber: lineNumber ?? this.lineNumber,
       wordIndex: wordIndex ?? this.wordIndex,
       isVerseMarker: isVerseMarker ?? this.isVerseMarker,
+      isLastWordInVerse: isLastWordInVerse ?? this.isLastWordInVerse,
     );
   }
 }

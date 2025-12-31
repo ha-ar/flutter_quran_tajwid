@@ -216,7 +216,7 @@ When you're ready for breaking changes:
 1. Update CHANGELOG with migration guide
 2. Mark deprecated APIs with `@deprecated`
 3. Give users time to migrate (publish 1.x with deprecation warnings)
-4. Then release 2.0.0
+4. Then release 2.0
 
 ## Quick Command Reference
 
