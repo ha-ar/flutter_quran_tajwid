@@ -8,7 +8,6 @@ import '../models/highlighted_word.dart';
 import '../models/recitation_result.dart';
 import '../providers/app_state.dart';
 import '../services/audio_recording_service.dart';
-import '../services/feedback_speech_service.dart';
 import '../services/gemini_live_service.dart';
 import '../services/quran_json_service.dart';
 import '../services/tajweed_feedback_service.dart';
@@ -22,13 +21,13 @@ typedef OnRecitationComplete = void Function(RecitationResult result);
 
 class RecitationScreen extends ConsumerStatefulWidget {
   final int initialPageNumber;
-  
+
   /// Optional callback that fires when recitation is completed
   /// Use result.toJson() or result.toJsonString() to get JSON output
   final OnRecitationComplete? onRecitationComplete;
-  
+
   const RecitationScreen({
-    super.key, 
+    super.key,
     this.initialPageNumber = 1,
     this.onRecitationComplete,
   });
@@ -39,7 +38,6 @@ class RecitationScreen extends ConsumerStatefulWidget {
 
 class _RecitationScreenState extends ConsumerState<RecitationScreen> {
   late final AudioRecordingService _audioRecordingService;
-  final FeedbackSpeechService _feedbackSpeechService = FeedbackSpeechService();
   GeminiLiveService? _geminiService;
   StreamSubscription<GeminiTranscriptionMessage>? _transcriptionSubscription;
   StreamSubscription<String>? _geminiErrorSubscription;
@@ -62,7 +60,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     super.initState();
     _currentPageNumber = widget.initialPageNumber;
     _audioRecordingService = AudioRecordingService();
-    _feedbackSpeechService.init();
+    _audioRecordingService = AudioRecordingService();
     _bootstrap();
   }
 
@@ -439,11 +437,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
             ),
           );
           // Play audio feedback only when user requests info
-          if (word.status == WordStatus.recitedNearMiss) {
-            _feedbackSpeechService.speakStatus('near');
-          } else if (word.status == WordStatus.recitedTajweedError) {
-            _feedbackSpeechService.speakStatus('error');
-          }
+          // (TTS removed)
         },
         child: Tooltip(
           message: word.status == WordStatus.recitedNearMiss
@@ -493,7 +487,6 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
 
     final audioMatching = ref.read(audioMatchingServiceProvider);
     audioMatching.clearBuffer();
-    audioMatching.resetMatchTracking();
 
     _activeVerse = null;
     _nextVerseToDetect = 1;
@@ -551,14 +544,12 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
     // Still maintain the buffer in case we want to re-enable local matching later
     final audioMatching = ref.read(audioMatchingServiceProvider);
     audioMatching.addAudioChunk(chunk);
-    
+
     // Periodically clear old data from the buffer since we aren't using segments right now
     if (audioMatching.getBuffer().length > 160000) {
-       audioMatching.clearBuffer();
+      audioMatching.clearBuffer();
     }
   }
-
-
 
   void _handleTranscription(GeminiTranscriptionMessage message) {
     // Debug: log all transcriptions to see if they're arriving
@@ -842,7 +833,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
             : 'Surah ${_surahNames[_currentSurahNumber]} verse $verseNumber completed - ready for verse $_nextVerseToDetect';
         debugPrint(
             '✓ Surah $_currentSurahNumber verse $verseNumber complete. Next verse: $_nextVerseToDetect');
-        
+
         // Clear audio buffer after successful verse completion to prevent "stuck" state
         ref.read(audioMatchingServiceProvider).clearBuffer();
       } else {
@@ -856,7 +847,7 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
               ? 'Surah ${_surahNames[_surahOrder[_currentSurahIndex - 1]]} finished with $finalErrorCount errors - start Surah ${_surahNames[_currentSurahNumber]} verse 1'
               : 'Surah ${_surahNames[_surahOrder[_currentSurahIndex - 1]]} finished - start Surah ${_surahNames[_currentSurahNumber]} verse 1';
           debugPrint('✓ Surah transition: now surah $_currentSurahNumber');
-          
+
           // Clear audio buffer after surah transition
           ref.read(audioMatchingServiceProvider).clearBuffer();
 
@@ -1058,7 +1049,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                                     child: Text(
                                       item['word']!,
                                       style: const TextStyle(
-                                        fontFamily: QuranFontLoader.uthmaniFamily,
+                                        fontFamily:
+                                            QuranFontLoader.uthmaniFamily,
                                         fontSize: 18,
                                         color: Color(0xFF92400E),
                                       ),
@@ -1129,7 +1121,8 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
                                     child: Text(
                                       error['word']!,
                                       style: const TextStyle(
-                                        fontFamily: QuranFontLoader.uthmaniFamily,
+                                        fontFamily:
+                                            QuranFontLoader.uthmaniFamily,
                                         fontSize: 18,
                                         color: Color(0xFF991B1B),
                                       ),
@@ -1257,7 +1250,6 @@ class _RecitationScreenState extends ConsumerState<RecitationScreen> {
       unawaited(gemini.disconnect());
     }
     unawaited(_audioRecordingService.dispose());
-    _feedbackSpeechService.dispose();
     super.dispose();
   }
 }

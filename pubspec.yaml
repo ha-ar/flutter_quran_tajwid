@@ -1,13 +1,13 @@
 name: flutter_quran_tajwid
-description: A Flutter package for real-time Quranic recitation analysis with AI-powered transcription, Tajweed error detection, and word-by-word highlighting. Displays 15-line page layout with complete Quran (604 pages).
+description: A Flutter package for real-time Quranic recitation analysis with AI-powered transcription, Smart Tajweed feedback, word-by-word highlighting, and IndoPak/Uthmani font support. Features a 15-line Mushaf layout (604 pages).
 repository: https://github.com/ha-ar/flutter_quran_tajwid
 homepage: https://github.com/ha-ar/flutter_quran_tajwid
 issue_tracker: https://github.com/ha-ar/flutter_quran_tajwid/issues
 
-version: 1.0.2
+version: 1.0.3
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -23,8 +23,6 @@ dependencies:
 
   # Audio Recording
   record: ^6.1.2
-  audio_service: ^0.18.18
-  flutter_tts: ^3.8.3
 
   # Local Data Storage & Caching
   hive: ^2.2.3
@@ -37,7 +35,6 @@ dependencies:
   # UI
   flutter_screenutil: ^5.9.0
   string_similarity: ^2.1.1
-
 
 dev_dependencies:
   flutter_test:

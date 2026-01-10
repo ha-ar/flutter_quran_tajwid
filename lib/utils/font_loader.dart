@@ -5,14 +5,15 @@ import 'package:flutter/services.dart';
 class QuranFontLoader {
   static bool _isLoaded = false;
   static const String uthmaniFamily = 'IndoPak';
-  
+
   // Asset paths - try package path first, then direct path
-  static const String _packageFontPath = 'packages/flutter_quran_tajwid/assets/fonts/indopak.woff2';
+  static const String _packageFontPath =
+      'packages/flutter_quran_tajwid/assets/fonts/indopak.woff2';
   static const String _directFontPath = 'assets/fonts/indopak.woff2';
 
   /// Loads the Uthmani font programmatically from assets.
   /// Call this once at app startup before using the font.
-  /// 
+  ///
   /// Example:
   /// ```dart
   /// void main() async {
@@ -27,9 +28,9 @@ class QuranFontLoader {
     try {
       // Load Uthmani font
       final uthmaniLoader = FontLoader(uthmaniFamily);
-      
+
       ByteData? fontData;
-      
+
       // Try package path first (when used as a dependency)
       try {
         fontData = await rootBundle.load(_packageFontPath);
@@ -42,14 +43,15 @@ class QuranFontLoader {
           // ignore: avoid_print
           print('QuranFontLoader: Loading font from direct path');
         } catch (e2) {
-          throw Exception('Could not load font from either path. Package path error: $e, Direct path error: $e2');
+          throw Exception(
+              'Could not load font from either path. Package path error: $e, Direct path error: $e2');
         }
       }
-      
+
       uthmaniLoader.addFont(Future.value(fontData));
       await uthmaniLoader.load();
       _isLoaded = true;
-      
+
       // ignore: avoid_print
       print('QuranFontLoader: Uthmani font loaded successfully');
     } catch (e) {
@@ -62,4 +64,3 @@ class QuranFontLoader {
   /// Check if fonts have been loaded
   static bool get isLoaded => _isLoaded;
 }
-

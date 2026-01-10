@@ -129,7 +129,7 @@ class GeminiLiveService {
   /// Connect to Gemini Live API. Returns true if connection was successfully initiated.
   Future<bool> connect() async {
     _isManuallyDisconnecting = false;
-    
+
     if (_isConnected) {
       debugPrint('[GeminiLiveService] Already connected.');
       return true;
@@ -154,7 +154,8 @@ class GeminiLiveService {
       // Listen for incoming messages
       _channel!.stream.listen(
         (message) {
-          debugPrint('[GeminiLiveService] ⬇️ Received message: ${message.toString().substring(0, message.toString().length > 200 ? 200 : message.toString().length)}...');
+          debugPrint(
+              '[GeminiLiveService] ⬇️ Received message: ${message.toString().substring(0, message.toString().length > 200 ? 200 : message.toString().length)}...');
           _handleMessage(message);
         },
         onError: (error, stackTrace) {
@@ -164,7 +165,8 @@ class GeminiLiveService {
           _errorController.add('WebSocket error: $error');
         },
         onDone: () {
-          debugPrint('[GeminiLiveService] 🔌 WebSocket connection closed (onDone called)');
+          debugPrint(
+              '[GeminiLiveService] 🔌 WebSocket connection closed (onDone called)');
           _handleDisconnect();
         },
         cancelOnError: false,
@@ -183,7 +185,7 @@ class GeminiLiveService {
       _isConnected = false;
       _connectionController.add(false);
       debugPrint('[GeminiLiveService] Disconnected.');
-      
+
       // Attempt to reconnect if checks pass
       _attemptReconnect();
     }
@@ -191,21 +193,21 @@ class GeminiLiveService {
 
   void _attemptReconnect() {
     if (_isManuallyDisconnecting) {
-       debugPrint('[GeminiLiveService] Manual disconnect, not reconnecting.');
-       return;
+      debugPrint('[GeminiLiveService] Manual disconnect, not reconnecting.');
+      return;
     }
 
     // Only reconnect if we weren't manually disconnected (channel check usually sufficient)
     // and if we have an API key.
     // For now, simple backoff or immediate retry.
     debugPrint('[GeminiLiveService] 🔄 Attempting auto-reconnect...');
-    
+
     Future.delayed(const Duration(milliseconds: 500), () {
       connect().then((success) {
         if (success) {
-           debugPrint('[GeminiLiveService] ✅ Reconnected successfully.');
+          debugPrint('[GeminiLiveService] ✅ Reconnected successfully.');
         } else {
-           debugPrint('[GeminiLiveService] ❌ Reconnect failed.');
+          debugPrint('[GeminiLiveService] ❌ Reconnect failed.');
         }
       });
     });
@@ -290,7 +292,8 @@ class GeminiLiveService {
 
       // Check for server content with transcription or text response
       // Check for serverContent with transcription or text response (handle both snake_case and camelCase)
-      final serverContent = decoded['server_content'] ?? decoded['serverContent'];
+      final serverContent =
+          decoded['server_content'] ?? decoded['serverContent'];
       if (serverContent != null && serverContent is Map<String, dynamic>) {
         final transcription =
             GeminiTranscriptionMessage.fromJson(serverContent);
